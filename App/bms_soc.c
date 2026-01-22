@@ -80,22 +80,22 @@ static float LiPo_soc_from_table(const uint16_t(*table)[6] , uint16_t cell_volta
         col_index = 5;
 
     if(cell_voltage <= table[0][col_index])
-        return 5; /* 5% */
+        return SOC_MIN; /* 5% */
     if(cell_voltage >= table[19][col_index])
-        return 100; /* 100% */
+        return SOC_MAX; /* 100% */
 
     for (uint8_t i = 0; i < 19; i++)
     {
         if(table[i][col_index] <= cell_voltage && table[i + 1][col_index] >= cell_voltage)
         {
             if(table[i + 1][col_index] == table[i][col_index])
-                return (i + 1) * 5;
+                return (i + 1) * 5 / SOC_PRECISION;
 
             float k = 1.0f * (table[i + 1][col_index] - cell_voltage) / (table[i + 1][col_index] - table[i][col_index]); /* 系数 */
-            return (i + 1 + k) * 5;
+            return (i + 1 + k) * 5 / SOC_PRECISION;
         }
     }
-    return 100;
+    return SOC_MAX;
 }
 
 /// @brief 根据磷酸铁锂 SOC-OCV表格、电芯电压、温度，得到SOC值
@@ -121,19 +121,19 @@ static float LiFeO4_soc_from_table(const uint16_t(*table)[6] , uint16_t cell_vol
         col_index = 5;
 
     if(cell_voltage <= table[0][col_index])
-        return 5; /* 5% */
+        return SOC_MIN; /* 5% */
     if(cell_voltage >= table[19][col_index])
-        return 100; /* 100% */
+        return SOC_MAX; /* 100% */
 
     for (uint8_t i = 0; i < 19; i++)
     {
         if(table[i][col_index] <= cell_voltage && table[i + 1][col_index] >= cell_voltage)
         {
             float k = 1.0f * (table[i + 1][col_index] - cell_voltage) / (table[i + 1][col_index] - table[i][col_index]); /* 系数 */
-            return (i + 1 + k) * 5;
+            return (i + 1 + k) * 5 / SOC_PRECISION;
         }
     }
-    return 100;
+    return SOC_MAX;
 }
 
 
@@ -159,10 +159,10 @@ static float init_SOC_under_OCV()
         ntc_temp -= ZERO_CELDIUS_KELVIN;
 
         /* 找到最低电压的电芯，以此计算SOC */
-        uint16_t cell_volt = 4500;
+        uint16_t cell_volt = 4500; /* 4.5V */
         for (uint8_t i = 0; i < slave_cfg_ptr->cell_serial_count; i++)
         {
-            if(cell_volt > slave_st_ptr->cmu_board_cell_voltage[i])
+            if(cell_volt > slave_st_ptr->cmu_board_cell_voltage[i] && slave_st_ptr->cmu_board_cell_voltage[i] > 2200)
                 cell_volt = slave_st_ptr->cmu_board_cell_voltage[i];
         }
 
@@ -190,33 +190,34 @@ void soc_init(void)
 
 /// @brief 定时器中断，每20ms触发一次
 /// @param  
-void __attribute__ ((section (".ram_code"))) CCU40_2_IRQHandler(void)
+void CCU40_2_IRQHandler(void)
 {
     bms_status_t* bms_st_ptr = read_bms_status();
     bms_config_t* bms_cfg_ptr = get_bms_config();
-    float bsp_cap = bms_cfg_ptr->bat_total_cap * 0.1f * bms_f_soc / 100; /* 上一次计算得到的容量，单位Ah */
+    float bsp_cap = bms_cfg_ptr->bat_total_cap * CAP_PRECISION * bms_f_soc * SOC_PRECISION / HUANDRED_PERCENT; /* 上一次计算得到的容量，单位Ah */
     float delta_cap = bms_st_ptr->power_current_A * SOC_CALC_PERIOD_MS * MS_BY_HOUR; /* 积分步长的容量变化 */
     bsp_cap -= delta_cap; /* 积分更新容量 */
-    bms_f_soc = 1.0f * bsp_cap / (bms_cfg_ptr->bat_total_cap * 0.1f) * 100; /* 根据容量，更新SOC值 */
+    bms_f_soc = 1.0f * bsp_cap / (bms_cfg_ptr->bat_total_cap * CAP_PRECISION) * HUANDRED_PERCENT / SOC_PRECISION; /* 根据容量，更新SOC值 */
 
-    if(bms_f_soc < 5)
+    if(bms_f_soc < SOC_MIN)
     {
-        bms_f_soc = 5;
-        bms_discharge(stop);
+        bms_f_soc = SOC_MIN;
+        bms_charge_discharge(stop); /* 停止大电流放电、停止大电流充电 */
+        bms_precharge(start); /* 开始小电流充电 */
         NVIC_DisableIRQ(CCU40_2_IRQn);
     }
-    if(bms_f_soc > 100)
+    if(bms_f_soc > SOC_MAX)
     {
-        bms_f_soc = 100;
-        bms_charge(stop);
+        bms_f_soc = SOC_MAX;
+        bms_charge_discharge(stop); /* 停止放电 */
         NVIC_DisableIRQ(CCU40_2_IRQn);
     }  
 
     bms_st_ptr->SOC = bms_f_soc;
 
-    if(bms_st_ptr->power_current_A < 0)
+    if(bms_st_ptr->power_current_A < 0) /* 充电 */
         bms_cfg_ptr->charge_cap += (-1 * delta_cap * 10); /* 因为 charge_cap 单位是0.1Ah */
-    else
+    else /* 放电 */
         bms_cfg_ptr->discharge_cap += (delta_cap * 10); /* 因为 discharge_cap 单位是0.1Ah */
 
     if(bms_cfg_ptr->bat_total_cap != 0)

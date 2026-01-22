@@ -6,10 +6,10 @@
 #include <stdint.h>
 
 #define XMC_SECTOR_ADDR   (uint32_t *)0x10032000U // 存储BMS状态信息结构体的位置
-#define BMS_CONFIG_FIXHEAD  0x49474947 /* BMS配置信息固定头部 */
+#define BMS_CONFIG_FIXHEAD  0x49474940 /* BMS配置信息固定头部 */
 
 
-#define CELL_OV_LIMIT_DEFAULT 4150 /* 单体过压4.15V */
+#define CELL_OV_LIMIT_DEFAULT 4250 /* 单体过压4.25V */
 #define CELL_UV_LIMIT_DEFAULT 2850 /* 单体欠压2.85V */
 #define PACK_OV_LIMIT_DEFAULT 55 /* 电池包过压55V */
 #define PACK_UV_LIMIT_DEFAULT 30 /* 电池包欠压30V */
@@ -74,6 +74,10 @@ void app_changed_bms_config(void);
 /// @brief 在BMS经历了放电与充电时，需要记录此处放电/充电的电量
 /// @param  
 void bms_record_charge_discharge_cap(void);
+
+/// @brief 如果SOC配置、BMS配置发生了更改，此时更新到Flash，如果没有则不做任何动作
+/// @param  
+void bms_background_update_config_into_flash(void);
 
 #endif
 

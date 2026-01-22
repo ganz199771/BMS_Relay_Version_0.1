@@ -712,7 +712,17 @@ void bms_response_host(bms_rx_node_t* rx_node)
             break;
 
         memcpy(bms_cfg, data, sizeof(bms_config_t)); /* 更新BMS配置 */
-        app_changed_bms_config();
+        app_changed_bms_config(); /* 上位机修改BMS主板配置参数 */
+
+        host_uart_tx_buffer[5] = 0; /* 载荷长度 */
+
+        /* BMS主机向上位机回复配置已修改，目前是在RAM中修改，等到下一次后台任务再修改Flash */
+        crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 6);
+
+        host_uart_tx_buffer[6] = crc16_rslt >> 8;
+        host_uart_tx_buffer[7] = crc16_rslt & 0xff;
+
+        host_uart_transmit(host_uart_tx_buffer, BMS_FRAME_NO_DATA_LEN);
         break;
 
     case Restore_BMS_Config:
@@ -824,18 +834,32 @@ void bms_response_host(bms_rx_node_t* rx_node)
         host_uart_transmit(host_uart_tx_buffer, BMS_FRAME_NO_DATA_LEN + 2);
         break;
 
-    case Control_Charge: // 上位机向BMS发送 Control_Charge 命令，BMS控制充电开关
+    case Control_PreCharge: // 上位机向BMS发送 Control_PreCharge 命令，BMS控制预充开关
         if(data[0] == start)
-            bms_charge(start);
+            bms_precharge(start);
         else if(data[0] == stop)
-            bms_charge(stop);
+            bms_precharge(stop);
+
+        host_uart_tx_buffer[5] = 0; 
+        crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 6);
+        host_uart_tx_buffer[6] = crc16_rslt >> 8;
+        host_uart_tx_buffer[7] = crc16_rslt & 0xff;
+
+        host_uart_transmit(host_uart_tx_buffer, BMS_FRAME_NO_DATA_LEN); /* BMS向上位机回复，表示接收到控制预充开关的命令 */
         break;
 
-    case Control_Discharge: // 上位机向BMS发送 Control_Discharge 命令，BMS控制放电开关
+    case Control_ChargeDischarge: // 上位机向BMS发送 Control_ChargeDischarge 命令，BMS控制充电/放电开关
         if(data[0] == start)
-            bms_discharge(start);
+            bms_charge_discharge(start);
         else if(data[0] == stop)
-            bms_discharge(stop);
+            bms_charge_discharge(stop);
+
+        host_uart_tx_buffer[5] = 0; 
+        crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 6);
+        host_uart_tx_buffer[6] = crc16_rslt >> 8;
+        host_uart_tx_buffer[7] = crc16_rslt & 0xff;
+
+        host_uart_transmit(host_uart_tx_buffer, BMS_FRAME_NO_DATA_LEN); /* BMS向上位机回复，表示接收到控制充电/放电开关的命令 */
         break;
     
     case Report_BMS_Error: // 上位机向BMS发送 Report_BMS_Error 命令，BMS回复当前的异常

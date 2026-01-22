@@ -454,11 +454,11 @@ static void bms_background_check_protection(void)
         {
             /* 单体过压 */
             if(ptr->slave_st.cmu_board_cell_voltage[i] > bms_cfg_ptr->cell_ov_limit)
-                bms_charge(stop); /* 停止充电 */
+                bms_charge_discharge(stop); /* 停止充电 */
 
             /* 单体欠压 */
             else if(ptr->slave_st.cmu_board_cell_voltage[i] < bms_cfg_ptr->cell_uv_limit)
-                bms_discharge(stop); /* 停止放电 */
+                bms_charge_discharge(stop); /* 停止放电 */
 
             pack_volt += ptr->slave_st.cmu_board_cell_voltage[i];
         }
@@ -471,15 +471,15 @@ static void bms_background_check_protection(void)
 
         /* pack过压 */
         if(pack_volt_V > bms_cfg_ptr->pack_ov_limit)
-            bms_charge(stop); /* 停止充电 */
+            bms_charge_discharge(stop); /* 停止充电 */
 
         /* pack欠压 */
         else if(pack_volt_V < bms_cfg_ptr->pack_uv_limit)
-            bms_discharge(stop); /* 停止放电 */
+            bms_charge_discharge(stop); /* 停止放电 */
     }
 
     /* 充电高温与充电低温 */
-    if(_bms_st.state == Charge)
+    if(_bms_st.state == ChargeDischarge && _bms_st.power_current_A < 0)
     {
         list_for_each_entry(ptr, &(slave_head_ptr->entry), entry)
         {
@@ -488,11 +488,11 @@ static void bms_background_check_protection(void)
                 float temp = 1.0f * ptr->slave_st.cmu_board_ntc_temp_result[i] / SLAVE_TEMP_SCALE - ZERO_CELDIUS_KELVIN;
                 if(temp > bms_cfg_ptr->charge_high_temp_limit)
                 {
-                    bms_charge(stop); /* 停止充电 */
+                    bms_charge_discharge(stop); /* 停止充电 */
                 }
                 else if(temp < bms_cfg_ptr->charge_low_temp_limit)
                 {
-                    bms_charge(stop); /* 停止充电 */
+                    bms_charge_discharge(stop); /* 停止充电 */
                     heat_slave_cell(ptr->slave_id, bms_cfg_ptr->charge_low_temp_limit + 2); /* 加热从机pack */
                 }
             }
@@ -500,7 +500,7 @@ static void bms_background_check_protection(void)
     }
 
     /* 放电高温与放电低温 */
-    else if(_bms_st.state == Discharge)
+    else if(_bms_st.state == ChargeDischarge && _bms_st.power_current_A > 0)
     {
         list_for_each_entry(ptr, &(slave_head_ptr->entry), entry)
         {
@@ -509,11 +509,11 @@ static void bms_background_check_protection(void)
                 float temp = 1.0f * ptr->slave_st.cmu_board_ntc_temp_result[i] / SLAVE_TEMP_SCALE - ZERO_CELDIUS_KELVIN;
                 if(temp > bms_cfg_ptr->discharge_high_temp_limit)
                 {
-                    bms_discharge(stop); /* 停止放电 */
+                    bms_charge_discharge(stop); /* 停止放电 */
                 }
                 else if(temp < bms_cfg_ptr->discharge_low_temp_limit)
                 {
-                    bms_discharge(stop); /* 停止充电 */
+                    bms_charge_discharge(stop); /* 停止放电 */
                     heat_slave_cell(ptr->slave_id, bms_cfg_ptr->discharge_low_temp_limit + 2); /* 加热从机pack */
                 }
             }
@@ -522,10 +522,10 @@ static void bms_background_check_protection(void)
 
     /* 充电与放电过流 */
     if(_bms_st.power_current_A > bms_cfg_ptr->discharge_current_limit)
-        bms_discharge(stop); /* 停止放电 */
+        bms_charge_discharge(stop); /* 停止放电 */
 
     if(_bms_st.power_current_A < 0 && (-1 * _bms_st.power_current_A ) > bms_cfg_ptr->charge_current_limit)
-        bms_charge(stop); /* 停止充电 */
+        bms_charge_discharge(stop); /* 停止充电 */
 }
 
 /// @brief 获得RAM占用率，获得CPU使用率
@@ -551,25 +551,19 @@ void bms_background_work()
     bms_background_check_protection(); /* 检查是否因为过压/欠压/高温/低温触发了保护 */
 
     bms_background_check_code_state(); /* 检查BMS主机代码的RAM占用率，CPU使用率 */
+
+    bms_background_update_config_into_flash(); /* 检查是否需要将修改后的BMS配置更新到Flash */
 }
 
-/// @brief BMS执行放电命令
+/// @brief BMS执行充电/放电命令
 /// @param st 
-void bms_discharge(coil_status_t st)
+void bms_charge_discharge(coil_status_t st)
 {
-/**  
- * BMS放电的流程是：
- * 1）接收到指令放电
- * 2）首先打开预充继电器开关，向外放电，持续时间3s
- * 3）关闭预充继电器开关
- * 4）打开放电开关
- * 
- * */ 
     if(st == start)
     {
         /* 打开主继电器 */
         XMC_GPIO_SetOutputHigh(Coil1_Pin_PORT, Coil1_Pin_PIN); 
-        _bms_st.state = Discharge;
+        _bms_st.state = ChargeDischarge;
         bms_record_charge_discharge_cap(); /* 有放电动作 */
     }
     else
@@ -581,28 +575,20 @@ void bms_discharge(coil_status_t st)
 
 }
 
-/// @brief BMS执行充电命令
+/// @brief BMS执行预充命令
 /// @param st 
-void bms_charge(coil_status_t st)
+void bms_precharge(coil_status_t st)
 {
-/**  
- * BMS充电的流程是：
- * 1）通过光耦监测到PACK+电压＞BAT+电压，表示外接了充电器
- * 2）接收到充电指令
- * 2）打开充电继电器
- * 
- * */ 
-
     if(st == start)
     {
-        /* 打开主继电器 */
+        /* 打开预充继电器 */
         XMC_GPIO_SetOutputHigh(Coil2_Pin_PORT, Coil2_Pin_PIN); 
-        _bms_st.state = Charge;
-        bms_record_charge_discharge_cap(); /* 有充电动作 */
+        _bms_st.state = PreCharge;
+        bms_record_charge_discharge_cap(); /* 有预充动作 */
     }
     else
     {
-        /* 关闭主继电器 */
+        /* 关闭预充继电器 */
         XMC_GPIO_SetOutputLow(Coil2_Pin_PORT, Coil2_Pin_PIN); 
         _bms_st.state = Idle;
     }

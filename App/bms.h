@@ -103,8 +103,8 @@ typedef enum bms_cmd_type
     Read_BMS_NTC_Temp, // 主机/上位机读取BMS主板监测到的NTC温度值
     Report_BMS_Error, // 报告BMS错误
 
-    Control_Charge, // 控制充电
-    Control_Discharge, // 控制放电
+    Control_PreCharge, // 控制预充
+    Control_ChargeDischarge, // 控制充电/放电
     Write_BMS_Config, // 更新BMS配置
     Restore_BMS_Config // 将BMS配置恢复到出厂值
 }bms_cmd_type_t;
@@ -133,8 +133,8 @@ typedef union u32_union
 typedef enum bms_charge_state
 {
     Idle, // 空闲
-    Charge, // 充电
-    Discharge // 放电
+    PreCharge, // 预充
+    ChargeDischarge // 充电/放电
 } bms_charge_state_t;
 
 typedef enum bms_prepare_state
@@ -159,6 +159,7 @@ typedef enum bms_FSM_state
 
 typedef struct bms_status
 {
+    uint16_t timestamp; // 时间戳，表明BMS主机启动后运行时间，单位s
     uint16_t voltage; // 电池总电压，单位V
     int16_t power_current_A; // 动力线电流，单位A，大于0表示放电，小于0表示充电
     uint16_t iso_RP; // BAT+和PE之间绝缘电阻，单位KΩ
@@ -168,10 +169,9 @@ typedef struct bms_status
     int8_t NTC1_temp; // NTC1温度
     int8_t NTC2_temp; // NTC2温度
     uint8_t state; // BMS状态
-    uint8_t SOC; // SOC值
+    uint16_t SOC; // SOC值，单位0.01，例如5208表示SOC=52.08%
     uint8_t ram_usage; // RAM使用率，范围在0~100
     uint8_t cpu_usage; // CPU使用率，范围在0~100
-    uint16_t timestamp; // 时间戳，表明BMS主机启动后运行时间，单位s
 } bms_status_t;
 
 typedef enum coil_status
@@ -205,11 +205,11 @@ void bms_poll_slave_status();
 /// @brief BMS主机后台任务
 void bms_background_work();
 
-/// @brief BMS开始向外放电
-void bms_discharge(coil_status_t st);
+/// @brief BMS充电/放电
+void bms_charge_discharge(coil_status_t st);
 
-/// @brief BMS开始充电
-void bms_charge(coil_status_t st);
+/// @brief BMS预充（对于负载来说是预充，对于电池来说是小电流预放电）
+void bms_precharge(coil_status_t st);
 
 /// @brief BMS命令从机开启加热功能
 /// @param slave_id 从机ID

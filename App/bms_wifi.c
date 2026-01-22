@@ -466,18 +466,30 @@ void ESP12F_response()
         ESP12F_send_data(wifi_tx_buf, WIFI_FRAME_NO_DATA_LEN + 2);
         break;
 
-    case Control_Charge: /* 上位机控制BMS充电 */
+    case Control_PreCharge: /* 上位机控制BMS预充 */
         if(data[0] == start)
-            bms_charge(start);
+            bms_precharge(start);
         else if(data[0] == stop)
-            bms_charge(stop);
+            bms_precharge(stop);
+        
+        wifi_tx_buf[5] = 0;
+        crc_rslt = CRC16_MODBUS(wifi_tx_buf, 6);
+        wifi_tx_buf[6] = crc_rslt >> 8;
+        wifi_tx_buf[7] = crc_rslt & 0xff;
+        ESP12F_send_data(wifi_tx_buf, WIFI_FRAME_NO_DATA_LEN);
         break;
 
-    case Control_Discharge: /* 上位机命令BMS开始放电 */
+    case Control_ChargeDischarge: /* 上位机命令BMS充电/放电 */
         if(data[0] == start)
-            bms_discharge(start);
+            bms_charge_discharge(start);
         else if(data[0] == stop)
-            bms_discharge(stop);
+            bms_charge_discharge(stop);
+
+        wifi_tx_buf[5] = 0;
+        crc_rslt = CRC16_MODBUS(wifi_tx_buf, 6);
+        wifi_tx_buf[6] = crc_rslt >> 8;
+        wifi_tx_buf[7] = crc_rslt & 0xff;
+        ESP12F_send_data(wifi_tx_buf, WIFI_FRAME_NO_DATA_LEN);
         break;
 
     case Report_BMS_Error: /* 报告BMS错误 */

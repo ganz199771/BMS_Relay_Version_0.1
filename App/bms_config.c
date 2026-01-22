@@ -92,6 +92,8 @@ static void app_update_bms_config_into_flash(void)
     cfg_data.u16_data[1] = 0xffff;
     config_data[2] = cfg_data.u32_data;
     XMC_FLASH_WriteBlocks(XMC_SECTOR_ADDR + sizeof(uint32_t) * XMC_FLASH_WORDS_PER_BLOCK, config_data, 1, true); // 写配置数据
+
+    app_modify_bms_cfg = no; /* 上位机修改BMS配置已完成，置标志位no */
 }
 
 static void bms_update_SOC_related_data_into_flash(void)
@@ -113,6 +115,8 @@ static void bms_update_SOC_related_data_into_flash(void)
     config_data[3] = 0xffffffff;
     XMC_FLASH_ErasePage(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE); /* 擦除 */
     XMC_FLASH_WriteBlocks(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE, config_data, 1, true); // 写配置数据
+
+    bms_modify_soc_cfg = no; /* 修改充放电信息已完成，置标志位no */
 }
 
 /// @brief 从Flash读取配置信息并填充到结构体
@@ -208,4 +212,13 @@ void app_changed_bms_config(void)
 void bms_record_charge_discharge_cap(void)
 {
     bms_modify_soc_cfg = yes;
+}
+
+void bms_background_update_config_into_flash(void)
+{
+    if(app_modify_bms_cfg == yes)
+        app_update_bms_config_into_flash();
+
+    if(bms_modify_soc_cfg == yes)
+        bms_update_SOC_related_data_into_flash();
 }
