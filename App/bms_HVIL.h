@@ -1,22 +1,8 @@
 
-
 #ifndef BMS_HVIL_H
 #define BMS_HVIL_H
 
-
-
 #include <stdint.h>
-
-
-typedef struct pwm_cap_info
-{
-    uint16_t rising_edge_cnt; /* rising edge count, used for calculate period and duty cycle */
-    uint16_t falling_edge_cnt; /* falling edge count, used for calculate period and duty cycle */
-    uint16_t period_us; /* period in us */
-    uint8_t duty_cycle; /* duty_cycle is 80 means duty cycle is 80% */
-}pwm_cap_info_t;
-
-
 
 /* Every time that a capture trigger 0 occurs, CCcapt0, the actual value of the 
  * timer is captured into the capture register 1 and the previous value stored in 
@@ -27,6 +13,18 @@ typedef struct pwm_cap_info
  * timer is captured into the capture register 3 and the previous value stored in 
  * this register is transferred into capture register 2 */
 #define CAPTURE_0_VALUE_FALLING_EDGE 3
+
+
+#define PWM_DUTY_CYCLE_MIN 40 /* PWM输入捕获计算得到的占空比应该为50%，给定一个下限 */
+#define PWM_DUTY_CYCLE_MAX 60 /* PWM输入捕获计算得到的占空比应该为50%，给定一个下限 */
+
+typedef struct pwm_cap_info
+{
+    uint16_t rising_edge_cnt; /* rising edge count, used for calculate period and duty cycle */
+    uint16_t falling_edge_cnt; /* falling edge count, used for calculate period and duty cycle */
+    uint16_t period_us; /* period in us */
+    uint8_t duty_cycle; /* duty_cycle is 80 means duty cycle is 80% */
+}pwm_cap_info_t;
 
 
 /// @brief 获取HVIL PWM输入捕获信息

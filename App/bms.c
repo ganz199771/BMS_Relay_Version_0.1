@@ -446,6 +446,8 @@ static void bms_background_check_protection(void)
     bms_config_t* bms_cfg_ptr = get_bms_config();
     
     uint32_t pack_volt = 0; /* pack电压 */
+    uint8_t flag1 = 0;
+    uint8_t flag2 = 0;
 
     /* 单体过压与欠压 */
     list_for_each_entry(ptr, &(slave_head_ptr->entry), entry)
@@ -454,15 +456,31 @@ static void bms_background_check_protection(void)
         {
             /* 单体过压 */
             if(ptr->slave_st.cmu_board_cell_voltage[i] > bms_cfg_ptr->cell_ov_limit)
+            {
+                flag1 = 1;
                 bms_charge_discharge(stop); /* 停止充电 */
+                _bms_st.error_state |= BMS_CELL_OV_PROTECT; /* 添加错误标志 */
+            }
 
             /* 单体欠压 */
             else if(ptr->slave_st.cmu_board_cell_voltage[i] < bms_cfg_ptr->cell_uv_limit)
+            {
+                flag2 = 1;
                 bms_charge_discharge(stop); /* 停止放电 */
+                _bms_st.error_state |= BMS_CELL_UV_PROTECT; /* 添加错误标志 */
+            }
 
             pack_volt += ptr->slave_st.cmu_board_cell_voltage[i];
         }
     }
+
+    if(flag1 == 0)
+        _bms_st.error_state &= (~BMS_CELL_OV_PROTECT); /* 如果正常，去除错误标志 */
+
+    if(flag2 == 0)
+        _bms_st.error_state &= (~BMS_CELL_UV_PROTECT); /* 如果正常，去除错误标志 */
+
+    flag1 = 0;
 
     /* Pack过压与欠压 */
     if(slave_cfg.cell_serial_count != 0)
@@ -471,12 +489,29 @@ static void bms_background_check_protection(void)
 
         /* pack过压 */
         if(pack_volt_V > bms_cfg_ptr->pack_ov_limit)
+        {
+            flag1 = 1;
             bms_charge_discharge(stop); /* 停止充电 */
+            _bms_st.error_state |= BMS_PACK_OV_PROTECT; /* 添加错误标志 */
+        }
 
         /* pack欠压 */
         else if(pack_volt_V < bms_cfg_ptr->pack_uv_limit)
+        {
+            flag2 = 1;
             bms_charge_discharge(stop); /* 停止放电 */
+            _bms_st.error_state |= BMS_PACK_UV_PROTECT; /* 添加错误标志 */
+        }   
     }
+
+    if(flag1 == 0)
+        _bms_st.error_state &= (~BMS_PACK_OV_PROTECT); /* 如果正常，去除错误标志 */
+
+    if(flag2 == 0)
+        _bms_st.error_state &= (~BMS_PACK_UV_PROTECT); /* 如果正常，去除错误标志 */
+
+    flag1 = 0;
+    flag2 = 0;
 
     /* 充电高温与充电低温 */
     if(_bms_st.state == ChargeDischarge && _bms_st.power_current_A < 0)
@@ -488,19 +523,32 @@ static void bms_background_check_protection(void)
                 float temp = 1.0f * ptr->slave_st.cmu_board_ntc_temp_result[i] / SLAVE_TEMP_SCALE - ZERO_CELDIUS_KELVIN;
                 if(temp > bms_cfg_ptr->charge_high_temp_limit)
                 {
+                    flag1 = 1;
                     bms_charge_discharge(stop); /* 停止充电 */
+                    _bms_st.error_state |= BMS_CHARGE_HIGH_TEMP_PROTECT; /* 添加错误标志 */
                 }
                 else if(temp < bms_cfg_ptr->charge_low_temp_limit)
                 {
+                    flag2 = 1;
                     bms_charge_discharge(stop); /* 停止充电 */
                     heat_slave_cell(ptr->slave_id, bms_cfg_ptr->charge_low_temp_limit + 2); /* 加热从机pack */
+                    _bms_st.error_state |= BMS_CHARGE_LOW_TEMP_PROTECT; /* 添加错误标志 */
                 }
             }
         }
     }
 
+    if(flag1 == 0)
+        _bms_st.error_state &= (~BMS_CHARGE_HIGH_TEMP_PROTECT); /* 如果正常，去除错误标志 */
+
+    if(flag2 == 0)
+        _bms_st.error_state &= (~BMS_CHARGE_LOW_TEMP_PROTECT); /* 如果正常，去除错误标志 */
+
+    flag1 = 0;
+    flag2 = 0;
+
     /* 放电高温与放电低温 */
-    else if(_bms_st.state == ChargeDischarge && _bms_st.power_current_A > 0)
+    if(_bms_st.state == ChargeDischarge && _bms_st.power_current_A > 0)
     {
         list_for_each_entry(ptr, &(slave_head_ptr->entry), entry)
         {
@@ -509,23 +557,50 @@ static void bms_background_check_protection(void)
                 float temp = 1.0f * ptr->slave_st.cmu_board_ntc_temp_result[i] / SLAVE_TEMP_SCALE - ZERO_CELDIUS_KELVIN;
                 if(temp > bms_cfg_ptr->discharge_high_temp_limit)
                 {
+                    flag1 = 1;
                     bms_charge_discharge(stop); /* 停止放电 */
+                    _bms_st.error_state |= BMS_DISCHARGE_HIGH_TEMP_PROTECT; /* 添加错误标志 */
                 }
                 else if(temp < bms_cfg_ptr->discharge_low_temp_limit)
                 {
+                    flag2 = 1;
                     bms_charge_discharge(stop); /* 停止放电 */
                     heat_slave_cell(ptr->slave_id, bms_cfg_ptr->discharge_low_temp_limit + 2); /* 加热从机pack */
+                    _bms_st.error_state |= BMS_DISCHARGE_LOW_TEMP_PROTECT; /* 添加错误标志 */
                 }
             }
         }
     }
 
-    /* 充电与放电过流 */
-    if(_bms_st.power_current_A > bms_cfg_ptr->discharge_current_limit)
-        bms_charge_discharge(stop); /* 停止放电 */
+    if(flag1 == 0)
+        _bms_st.error_state &= (~BMS_DISCHARGE_HIGH_TEMP_PROTECT); /* 如果正常，去除错误标志 */
 
-    if(_bms_st.power_current_A < 0 && (-1 * _bms_st.power_current_A ) > bms_cfg_ptr->charge_current_limit)
+    if(flag2 == 0)
+        _bms_st.error_state &= (~BMS_DISCHARGE_LOW_TEMP_PROTECT); /* 如果正常，去除错误标志 */
+
+    flag1 = 0;
+    flag2 = 0;
+
+    /* 充电与放电过流 */
+    if(_bms_st.power_current_A > bms_cfg_ptr->discharge_current_limit) /* 放电过流 */
+    {
+        flag1 = 1;
+        bms_charge_discharge(stop); /* 停止放电 */
+        _bms_st.error_state |= BMS_DISCHARGE_OVER_CURRENT_PROTECT; /* 添加错误标志 */
+    }
+
+    if(_bms_st.power_current_A < 0 && (-1 * _bms_st.power_current_A ) > bms_cfg_ptr->charge_current_limit) /* 充电过流 */
+    {
+        flag2 = 1;
         bms_charge_discharge(stop); /* 停止充电 */
+        _bms_st.error_state |= BMS_CHARGE_OVER_CURRENT_PROTECT; /* 添加错误标志 */
+    }
+        
+    if(flag1 == 0)
+        _bms_st.error_state &= (~BMS_DISCHARGE_OVER_CURRENT_PROTECT); /* 如果正常，去除错误标志 */
+
+    if(flag2 == 0)
+        _bms_st.error_state &= (~BMS_CHARGE_OVER_CURRENT_PROTECT); /* 如果正常，去除错误标志 */
 }
 
 /// @brief 获得RAM占用率，获得CPU使用率

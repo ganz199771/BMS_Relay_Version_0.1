@@ -44,7 +44,6 @@ void bms_response_slave(bms_rx_node_t* rx_node);
 /// @param rx_node 
 void bms_response_host(bms_rx_node_t* rx_node);
 
-
 /// @brief BMS准备发送帧，发送到RS485总线上的从机
 /// @param target_id 目标ID
 /// @param cmd_type 命令类型

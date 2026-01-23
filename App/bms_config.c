@@ -44,6 +44,7 @@ void bms_init_flash_config(void)
     bms_config_data.balance_start_volt = BALANCE_START_mVOLT_DEFAULT;
     bms_config_data.balance_precision = BALANCE_PRECISION_mVOLT_DEFAULT;
     bms_config_data.bat_total_cap = BAT_TOTAL_CAPCITY_DEFAULT;
+    bms_config_data.discharge_soc_limit = DISCHARGE_SOC_LIMIT;
     bms_config_data.cycle_times = CYCLE_TIMES_DEFAULT;
     bms_config_data.charge_cap = CHARGE_TOTAL_CAP_DEFAULT;
     bms_config_data.discharge_cap = DISCHARGE_TOTAL_CAP_DEFAULT;
@@ -89,7 +90,7 @@ static void app_update_bms_config_into_flash(void)
     config_data[1] = cfg_data.u32_data;
 
     cfg_data.u16_data[0] = bms_config_data.bat_total_cap;
-    cfg_data.u16_data[1] = 0xffff;
+    cfg_data.u16_data[1] = bms_config_data.discharge_soc_limit;
     config_data[2] = cfg_data.u32_data;
     XMC_FLASH_WriteBlocks(XMC_SECTOR_ADDR + sizeof(uint32_t) * XMC_FLASH_WORDS_PER_BLOCK, config_data, 1, true); // 写配置数据
 
@@ -153,6 +154,7 @@ static void read_config_file_from_flash(void)
 
     cfg_data.u32_data = bms_config_buf[2];
     bms_config_data.bat_total_cap = cfg_data.u16_data[0]; /* 电池总容量 */
+    bms_config_data.discharge_soc_limit = cfg_data.u16_data[1]; /* 放电截止SOC */
 
     /* 循环次数、充电容量、放电容量 */
     XMC_FLASH_ReadBlocks(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE, bms_config_buf, 1);

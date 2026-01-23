@@ -35,6 +35,14 @@ typedef enum AT_rx_state
     rx_n // 接收到\n
 } AT_rx_state_t;
 
+/// @brief 是否有设备主动连接BMS主板的无线热点或者蓝牙
+typedef enum wireless_link_state
+{
+    no_link, /* 没有连接 */
+    link /* 有连接 */
+} wireless_link_state_t;
+
+
 typedef struct wifi_data
 {
     uint8_t id;
@@ -72,5 +80,9 @@ void wifi_send_AT_cmd(const char* AT_cmd);
 /// @brief wifi接收堆内存使用空间
 /// @return 
 uint16_t wifi_heap_used();
+
+/// @brief 获取当前wifi连接状态
+/// @return 
+wireless_link_state_t is_wifi_linked();
 
 #endif

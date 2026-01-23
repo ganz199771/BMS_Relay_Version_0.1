@@ -213,6 +213,14 @@ uint16_t wifi_heap_used()
     return wifi_mempool->usedCount * (sizeof(bms_rx_node_t) + WIFI_RX_BUFFER_SIZE);
 }
 
+wireless_link_state_t is_wifi_linked()
+{
+    if(get_wifi_link_id == 0)
+        return no_link;
+    else
+        return link;
+}
+
 void ESP12F_send_data(uint8_t* data, uint8_t len)
 {
     /* 第一步，先发送 AT+CIPSEND=<link ID>,<length> */   
@@ -473,10 +481,11 @@ void ESP12F_response()
             bms_precharge(stop);
         
         wifi_tx_buf[5] = 0;
-        crc_rslt = CRC16_MODBUS(wifi_tx_buf, 6);
-        wifi_tx_buf[6] = crc_rslt >> 8;
-        wifi_tx_buf[7] = crc_rslt & 0xff;
-        ESP12F_send_data(wifi_tx_buf, WIFI_FRAME_NO_DATA_LEN);
+        wifi_tx_buf[6] = data[0];
+        crc_rslt = CRC16_MODBUS(wifi_tx_buf, 7);
+        wifi_tx_buf[7] = crc_rslt >> 8;
+        wifi_tx_buf[8] = crc_rslt & 0xff;
+        ESP12F_send_data(wifi_tx_buf, WIFI_FRAME_NO_DATA_LEN + 1);
         break;
 
     case Control_ChargeDischarge: /* 上位机命令BMS充电/放电 */
@@ -486,10 +495,11 @@ void ESP12F_response()
             bms_charge_discharge(stop);
 
         wifi_tx_buf[5] = 0;
-        crc_rslt = CRC16_MODBUS(wifi_tx_buf, 6);
-        wifi_tx_buf[6] = crc_rslt >> 8;
-        wifi_tx_buf[7] = crc_rslt & 0xff;
-        ESP12F_send_data(wifi_tx_buf, WIFI_FRAME_NO_DATA_LEN);
+        wifi_tx_buf[6] = data[0];
+        crc_rslt = CRC16_MODBUS(wifi_tx_buf, 7);
+        wifi_tx_buf[7] = crc_rslt >> 8;
+        wifi_tx_buf[8] = crc_rslt & 0xff;
+        ESP12F_send_data(wifi_tx_buf, WIFI_FRAME_NO_DATA_LEN + 1);
         break;
 
     case Report_BMS_Error: /* 报告BMS错误 */

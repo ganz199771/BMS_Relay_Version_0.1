@@ -840,12 +840,13 @@ void bms_response_host(bms_rx_node_t* rx_node)
         else if(data[0] == stop)
             bms_precharge(stop);
 
-        host_uart_tx_buffer[5] = 0; 
-        crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 6);
-        host_uart_tx_buffer[6] = crc16_rslt >> 8;
-        host_uart_tx_buffer[7] = crc16_rslt & 0xff;
+        host_uart_tx_buffer[5] = 1; 
+        host_uart_tx_buffer[6] = data[0]; /* 回复的状态 */
+        crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 7);
+        host_uart_tx_buffer[7] = crc16_rslt >> 8;
+        host_uart_tx_buffer[8] = crc16_rslt & 0xff;
 
-        host_uart_transmit(host_uart_tx_buffer, BMS_FRAME_NO_DATA_LEN); /* BMS向上位机回复，表示接收到控制预充开关的命令 */
+        host_uart_transmit(host_uart_tx_buffer, BMS_FRAME_NO_DATA_LEN + 1); /* BMS向上位机回复，表示接收到控制预充开关的命令 */
         break;
 
     case Control_ChargeDischarge: // 上位机向BMS发送 Control_ChargeDischarge 命令，BMS控制充电/放电开关
@@ -855,11 +856,12 @@ void bms_response_host(bms_rx_node_t* rx_node)
             bms_charge_discharge(stop);
 
         host_uart_tx_buffer[5] = 0; 
-        crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 6);
-        host_uart_tx_buffer[6] = crc16_rslt >> 8;
-        host_uart_tx_buffer[7] = crc16_rslt & 0xff;
+        host_uart_tx_buffer[6] = data[0]; /* 回复的状态 */
+        crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 7);
+        host_uart_tx_buffer[7] = crc16_rslt >> 8;
+        host_uart_tx_buffer[8] = crc16_rslt & 0xff;
 
-        host_uart_transmit(host_uart_tx_buffer, BMS_FRAME_NO_DATA_LEN); /* BMS向上位机回复，表示接收到控制充电/放电开关的命令 */
+        host_uart_transmit(host_uart_tx_buffer, BMS_FRAME_NO_DATA_LEN + 1); /* BMS向上位机回复，表示接收到控制充电/放电开关的命令 */
         break;
     
     case Report_BMS_Error: // 上位机向BMS发送 Report_BMS_Error 命令，BMS回复当前的异常

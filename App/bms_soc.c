@@ -222,5 +222,8 @@ void CCU40_2_IRQHandler(void)
 
     if(bms_cfg_ptr->bat_total_cap != 0)
         bms_cfg_ptr->cycle_times = (uint16_t)(1.0f * bms_cfg_ptr->discharge_cap / bms_cfg_ptr->bat_total_cap); /* 更新循环次数 */
+
+    if(bms_st_ptr->SOC / HUANDRED_PERCENT < bms_cfg_ptr->discharge_soc_limit)
+        bms_charge_discharge(stop); /* 停止放电 */
 }
 

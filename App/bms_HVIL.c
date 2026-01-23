@@ -39,7 +39,7 @@ void ccu4_0_SR1_INTERRUPT_HANDLER(void)
         HVIL_pwm_cap.duty_cycle = 1.0f * (HVIL_pwm_cap.falling_edge_cnt - HVIL_pwm_cap.rising_edge_cnt) / HVIL_pwm_cap.falling_edge_cnt * 100;
     }
 
-    if(HVIL_pwm_cap.duty_cycle > 51 || HVIL_pwm_cap.duty_cycle < 49)
+    if(HVIL_pwm_cap.duty_cycle > PWM_DUTY_CYCLE_MAX || HVIL_pwm_cap.duty_cycle < PWM_DUTY_CYCLE_MIN)
     {
         HVIL_pwm_cap.duty_cycle = 0;
     }
@@ -66,7 +66,7 @@ void ccu8_0_SR1_INTERRUPT_HANDLER(void)
         main_coil_pwm_cap.duty_cycle = 1.0f * (main_coil_pwm_cap.falling_edge_cnt - main_coil_pwm_cap.rising_edge_cnt) / main_coil_pwm_cap.falling_edge_cnt * 100;
     }
 
-    if(main_coil_pwm_cap.duty_cycle > 51 || main_coil_pwm_cap.duty_cycle < 49)
+    if(main_coil_pwm_cap.duty_cycle > PWM_DUTY_CYCLE_MAX || main_coil_pwm_cap.duty_cycle < PWM_DUTY_CYCLE_MIN)
     {
         main_coil_pwm_cap.duty_cycle = 0;
     }

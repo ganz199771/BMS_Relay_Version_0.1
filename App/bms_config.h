@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #define XMC_SECTOR_ADDR   (uint32_t *)0x10032000U // 存储BMS状态信息结构体的位置
-#define BMS_CONFIG_FIXHEAD  0x49474940 /* BMS配置信息固定头部 */
+#define BMS_CONFIG_FIXHEAD  0x49474947 /* BMS配置信息固定头部 */
 
 
 #define CELL_OV_LIMIT_DEFAULT 4250 /* 单体过压4.25V */
@@ -25,6 +25,7 @@
 #define CYCLE_TIMES_DEFAULT 0 /* 循环次数 */
 #define CHARGE_TOTAL_CAP_DEFAULT 0 /* 总的充电容量Ah */
 #define DISCHARGE_TOTAL_CAP_DEFAULT 0 /* 总的放电容量Ah */
+#define DISCHARGE_SOC_LIMIT 15 /* 放电到系统容量的15%时截止 */
 
 /* 如何定义一个锂电池电芯的循环？
     循环次数的科学定义是指电池完成一次100%深度充放电的过程，但这并不意味着必须一次性完成。
@@ -48,6 +49,7 @@ typedef struct bms_config
     uint16_t balance_start_volt; // 均衡开启电压，单位mV
     uint16_t balance_precision; // 均衡精度，单位mV
     uint16_t bat_total_cap; // 容量，单位0.1Ah
+    uint16_t discharge_soc_limit; // 放电截止SOC，15表示当SOC<=15%时，禁止放电
 
     uint16_t cycle_times; /* 循环次数 */
     uint32_t charge_cap; /* 从全新电池开始使用来，总的充电容量，单位0.1Ah */

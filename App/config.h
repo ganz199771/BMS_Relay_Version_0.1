@@ -80,6 +80,17 @@
 #define BMS_5V_Abnormal 0x04 // BMS板上低压部分电压异常
 #define BMS_HV_OverVoltage 0x08 // 高压部分过压
 #define BMS_HV_NotConnect 0x10// 没有接高压
+#define BMS_CELL_OV_PROTECT 0x20 // 触发电芯过压保护
+#define BMS_CELL_UV_PROTECT 0x40 // 触发电芯欠压保护
+#define BMS_PACK_OV_PROTECT 0x80 // 触发pack过压保护
+#define BMS_PACK_UV_PROTECT 0x0100 // 触发pack欠压保护
+#define BMS_CHARGE_HIGH_TEMP_PROTECT 0x0200 // 触发充电过温保护
+#define BMS_CHARGE_LOW_TEMP_PROTECT 0x0400 // 触发充电低温保护
+#define BMS_DISCHARGE_HIGH_TEMP_PROTECT 0x0200 // 触发放电过温保护
+#define BMS_DISCHARGE_LOW_TEMP_PROTECT 0x0400 // 触发放电低温保护
+#define BMS_CHARGE_OVER_CURRENT_PROTECT 0x0800 // 触发充电过流保护
+#define BMS_DISCHARGE_OVER_CURRENT_PROTECT 0x1000 // 触发放电过流保护
+
 
 //// 配置1
 // #define CELL_TYPE Lithium_Iron_Phosphate  /* 磷酸铁锂 */
