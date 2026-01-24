@@ -193,22 +193,15 @@ void soc_init(void)
 void CCU40_2_IRQHandler(void)
 {
     bms_status_t* bms_st_ptr = read_bms_status();
-
-    if(bms_st_ptr->state == Idle)
-        return;
-
     bms_config_t* bms_cfg_ptr = get_bms_config();
     float bsp_cap = bms_cfg_ptr->bat_total_cap * CAP_PRECISION * bms_f_soc * SOC_PRECISION / HUANDRED_PERCENT; /* 上一次计算得到的容量，单位Ah */
     float delta_cap = bms_st_ptr->power_current_A * SOC_CALC_PERIOD_MS * MS_BY_HOUR; /* 积分步长的容量变化 */
     bsp_cap -= delta_cap; /* 积分更新容量 */
     bms_f_soc = 1.0f * bsp_cap / (bms_cfg_ptr->bat_total_cap * CAP_PRECISION) * HUANDRED_PERCENT / SOC_PRECISION; /* 根据容量，更新SOC值 */
 
-    /* 当放电时SOC放电到5%或者以下时，禁止大电流充电和放电，此时可以使用预充继电器给电池充电 */
-    if(bms_f_soc < SOC_MIN)
-    {
-        bms_f_soc = SOC_MIN;
-        bms_charge_discharge(stop); /* 停止大电流放电、停止大电流充电 */
-    }
+    /* 当放电时SOC放电到限制SOC或者以下时，禁止大电流充电和放电，此时可以使用预充继电器给电池充电 */
+    if(bms_f_soc / HUANDRED_PERCENT < bms_cfg_ptr->discharge_soc_limit)
+        bms_charge_discharge(stop); /* 停止放电 */
 
     /* 当充电时SOC计算到100%时，停止积分强制保持在100% */
     if(bms_f_soc > SOC_MAX)
@@ -225,8 +218,5 @@ void CCU40_2_IRQHandler(void)
 
     if(bms_cfg_ptr->bat_total_cap != 0)
         bms_cfg_ptr->cycle_times = (uint16_t)(1.0f * bms_cfg_ptr->discharge_cap / bms_cfg_ptr->bat_total_cap); /* 更新循环次数 */
-
-    if(bms_st_ptr->SOC / HUANDRED_PERCENT < bms_cfg_ptr->discharge_soc_limit)
-        bms_charge_discharge(stop); /* 停止放电 */
 }
 

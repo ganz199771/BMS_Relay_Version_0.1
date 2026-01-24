@@ -115,6 +115,12 @@ static void bms_board_HVIL_init(void)
 
     NVIC_SetPriority(CCU40_1_IRQn, 6U);
     NVIC_EnableIRQ(CCU40_1_IRQn);
+
+    NVIC_SetPriority(CCU80_0_IRQn, 6U);
+    NVIC_EnableIRQ(CCU80_0_IRQn);
+
+    NVIC_SetPriority(CCU80_1_IRQn, 6U);
+    NVIC_EnableIRQ(CCU80_1_IRQn);
 }
 
 

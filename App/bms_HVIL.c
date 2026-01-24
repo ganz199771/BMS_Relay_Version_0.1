@@ -3,10 +3,8 @@
 #include "bms_HVIL.h"
 #include "cycfg_peripherals.h"
 
-
 static pwm_cap_info_t main_coil_pwm_cap; /* 主继电器状态 */
 static pwm_cap_info_t HVIL_pwm_cap; /* HVIL状态 */
-
 
 pwm_cap_info_t* get_HVIL_pwm_cap()
 {
