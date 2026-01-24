@@ -444,3 +444,13 @@
 13	235	7908504491354900	D:/document/code/BMS_Relay_Version_0.1/build/Debug/local/App/bms.o	bcf0d1e500d60f8a
 29	263	7908504491591498	D:/document/code/BMS_Relay_Version_0.1/build/Debug/local/App/bms_rs485_uart.o	278fdc753cf86995
 264	487	7908504493905110	build/APP_XMC-GENERIC/Debug/mtb-example-xmc-empty-app.elf	36f201c9529641d2
+12	183	7908586071893589	D:/document/code/BMS_Relay_Version_0.1/build/Debug/local/App/bms_soc.o	cba47e71e12a31d2
+183	428	7908586073607064	build/APP_XMC-GENERIC/Debug/mtb-example-xmc-empty-app.elf	36f201c9529641d2
+21	211	7908588430071410	D:/document/code/BMS_Relay_Version_0.1/build/Debug/local/App/bms_config.o	253f834e64cc4a38
+40	237	7908588430256070	D:/document/code/BMS_Relay_Version_0.1/build/Debug/local/App/bms_soc.o	cba47e71e12a31d2
+49	251	7908588430327857	D:/document/code/BMS_Relay_Version_0.1/build/Debug/local/App/bms_wifi.o	58d99f71d2a4b29f
+12	266	7908588429981390	D:/document/code/BMS_Relay_Version_0.1/build/Debug/local/App/bms.o	bcf0d1e500d60f8a
+31	279	7908588430134089	D:/document/code/BMS_Relay_Version_0.1/build/Debug/local/App/bms_rs485_uart.o	278fdc753cf86995
+279	517	7908588432654507	build/APP_XMC-GENERIC/Debug/mtb-example-xmc-empty-app.elf	36f201c9529641d2
+11	191	7908594671111492	D:/document/code/BMS_Relay_Version_0.1/build/Debug/local/App/bms_soc.o	cba47e71e12a31d2
+191	408	7908594672904288	build/APP_XMC-GENERIC/Debug/mtb-example-xmc-empty-app.elf	36f201c9529641d2

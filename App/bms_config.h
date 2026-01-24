@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #define XMC_SECTOR_ADDR   (uint32_t *)0x10032000U // 存储BMS状态信息结构体的位置
-#define BMS_CONFIG_FIXHEAD  0x49474947 /* BMS配置信息固定头部 */
+#define BMS_CONFIG_FIXHEAD  0x49474940 /* BMS配置信息固定头部 */
 
 
 #define CELL_OV_LIMIT_DEFAULT 4250 /* 单体过压4.25V */
@@ -17,7 +17,7 @@
 #define CHARGE_LOW_TEMP_DEFAULT -20 /* 充电低温-20℃ */
 #define DISCHARGE_HIGH_TEMP_DEFAULT 65 /* 放电高温65℃ */
 #define DISCHARGE_LOW_TEMP_DEFAULT -30 /* 放电低温-30℃ */
-#define CHARGE_CURRENT_DEFAULT 50 /* 充电过流50A */
+#define CHARGE_CURRENT_DEFAULT 100 /* 充电过流100A */
 #define DISCHARGE_CURRENT_DEFAULT 450 /* 放电过流450A */
 #define BALANCE_START_mVOLT_DEFAULT 3850 /* 均衡开启电压3.85V */
 #define BALANCE_PRECISION_mVOLT_DEFAULT 10 /* 均衡精度10mV */

@@ -10,6 +10,15 @@
 #define BMS_SLAVE_STATE_NOT_FETCH_FLAG 0xff
 
 
+#define CELL_OV_FLAG 0x01
+#define CELL_UV_FLAG 0x02
+#define PACK_OV_FLAG 0x01
+#define PACK_UV_FLAG 0x02
+#define CELL_OVER_TEMP_FLAG 0x01
+#define CELL_UNDER_TEMP_FLAG 0x02
+#define CHARGE_OVER_CURRENT_FLAG 0x01
+#define DISCHARGE_OVER_CURRENT_FLAG 0x01
+
 /// @brief 存储接收数据指针
 typedef struct bms_rx_node
 {
