@@ -44,8 +44,8 @@ typedef struct slave_config
     uint8_t cell_type; // 电芯类型
     uint8_t cell_serial_count; // 电芯数量
     uint8_t pack_capacity; // 电池容量Ah
-    uint8_t cmu_hardware_version: 4; // CMU硬件版本
-    uint8_t cmu_software_version: 4; // CMU软件版本
+    uint8_t cmu_hardware_version; // CMU硬件版本
+    uint8_t cmu_software_version; // CMU软件版本
     uint8_t ntc_count; // NTC数量
 
     char ntc_code[0x10]; // NTC型号

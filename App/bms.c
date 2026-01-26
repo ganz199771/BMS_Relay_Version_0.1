@@ -117,7 +117,7 @@ static void bms_call_slave_config()
             tx_frame = bms_prepare_rs485_tx_frame(ptr->slave_id, Read_Pack_Config, 0, NULL);
             if(tx_frame)
                 rs485_transmit(tx_frame, BMS_FRAME_NO_DATA_LEN);
-            bms_delay_ms(10);
+            bms_delay_ms(10); /* 115200bps，从机返回BMS配置结构体102字节至少需要7.1ms */
             break;
         }
     }

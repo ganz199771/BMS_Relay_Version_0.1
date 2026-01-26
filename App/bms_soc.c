@@ -6,6 +6,7 @@
 #include "bms_rs485_uart.h"
 
 static float bms_f_soc = 0.f;
+static volatile uint8_t soc_tick = 0;
 
 /* 三元锂SOC-OCV表格 */
 static const uint16_t LiPo_SOC_OCV_table[20][6] = {
@@ -86,7 +87,7 @@ static float LiPo_soc_from_table(const uint16_t(*table)[6] , uint16_t cell_volta
 
     for (uint8_t i = 0; i < 19; i++)
     {
-        if(table[i][col_index] <= cell_voltage && table[i + 1][col_index] >= cell_voltage)
+        if((table[i][col_index] <= cell_voltage) && (table[i + 1][col_index] >= cell_voltage))
         {
             if(table[i + 1][col_index] == table[i][col_index])
                 return (i + 1) * 5 / SOC_PRECISION;
@@ -194,6 +195,20 @@ void CCU40_2_IRQHandler(void)
 {
     bms_status_t* bms_st_ptr = read_bms_status();
     bms_config_t* bms_cfg_ptr = get_bms_config();
+
+    /* 在不放电时不进行安时积分，并且适当校准SOC */
+    if(bms_st_ptr->state == Idle)
+    {
+        soc_tick++;
+        if(soc_tick >= 10)
+        {
+            init_SOC_under_OCV(); /* 上电时刻，认为是准备让电池放电，更新BMS的SOC */
+            bms_st_ptr->SOC = bms_f_soc;
+            soc_tick = 0;
+        }
+        return;
+    }
+
     float bsp_cap = bms_cfg_ptr->bat_total_cap * CAP_PRECISION * bms_f_soc * SOC_PRECISION / HUANDRED_PERCENT; /* 上一次计算得到的容量，单位Ah */
     float delta_cap = bms_st_ptr->power_current_A * SOC_CALC_PERIOD_MS * MS_BY_HOUR; /* 积分步长的容量变化 */
     bsp_cap -= delta_cap; /* 积分更新容量 */

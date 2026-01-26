@@ -26,7 +26,7 @@
 #define BMS_HOST_RX_BUFFER_MAX 0x50 // 接收上位机帧最长80字节
 #define BMS_HOST_MEMBLOCK_COUNT_MAX 0x05 // 接收上位机所用内存块数量
 #define BMS_RS485_RX_BUFFER_MAX 0x80         // 接收RS485帧最长为128字节
-#define BMS_RS485_TX_BUFFER_MAX 0x80        // 发送RS485帧最长为128字节
+#define BMS_RS485_TX_BUFFER_MAX 0xA0        // 发送RS485帧最长为128字节
 #define BMS_RS485_MEMBLOCK_COUNT_MAX 0x0A   // 接收RS485帧buffer的内存块数量
 
 #define BMS_SLAVE_COUNT_MAX 0x10 // BMS主机能识别的最大从机数目

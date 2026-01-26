@@ -458,15 +458,15 @@ void bms_response_slave(bms_rx_node_t* rx_node)
         }
         break;
 
-    case Read_CMU_Version: // 读取 硬件版本[7:4]，软件版本[3:0]
+    case Read_CMU_Version: // 读取 硬件版本，软件版本
         list_for_each_entry(ptr, &_slave_node_head.entry, entry)
         {
             if(ptr->slave_id == transmitter_id)
             {
                 if(((*bms_know_slave_cfg_ptr) & BMS_KNOW_CMU_VERSION) == BMS_KNOW_NOTHING)
                 {
-                    slave_cfg_ptr->cmu_hardware_version = data[0] >> 4;
-                    slave_cfg_ptr->cmu_software_version = data[0] & 0x0f;
+                    slave_cfg_ptr->cmu_hardware_version = data[0];
+                    slave_cfg_ptr->cmu_software_version = data[1];
                     (*bms_know_slave_cfg_ptr) |= BMS_KNOW_CMU_VERSION; /* BMS了解了从机版本 */
                 }
             }
@@ -731,25 +731,14 @@ void bms_response_host(bms_rx_node_t* rx_node)
 
     case Read_Pack_Config:
         /* BMS从机配置 */
-        host_uart_tx_buffer[5] = 5;
-        host_uart_tx_buffer[6] = slave_cfg_ptr->cell_type;
-        host_uart_tx_buffer[7] = slave_cfg_ptr->cell_serial_count;
-        host_uart_tx_buffer[8] = slave_cfg_ptr->pack_capacity;
-        host_uart_tx_buffer[9] = slave_cfg_ptr->cmu_hardware_version;
-        host_uart_tx_buffer[9] <<= 4;
-        host_uart_tx_buffer[9] |= slave_cfg_ptr->cmu_software_version;
-        host_uart_tx_buffer[10] = slave_cfg_ptr->ntc_count;
+        host_uart_tx_buffer[5] = sizeof(slave_config_t);
 
-        // memcpy(&host_uart_tx_buffer[11], &slave_cfg.ntc_code, sizeof(slave_cfg.ntc_code)); // 将从机配置信息发送给上位机
-        // memcpy(&host_uart_tx_buffer[27], &slave_cfg.cell_code_string, sizeof(slave_cfg.cell_code_string));
-        // memcpy(&host_uart_tx_buffer[59], &slave_cfg.cell_source, sizeof(slave_cfg.cell_source));
-        // memcpy(&host_uart_tx_buffer[75], &slave_cfg.pack_code_string, sizeof(slave_cfg.pack_code_string));
-        // memcpy(&host_uart_tx_buffer[91], &slave_cfg.cmu_afe_code_string, sizeof(slave_cfg.cmu_afe_code_string));
+        memcpy(&host_uart_tx_buffer[6], slave_cfg_ptr, sizeof(slave_config_t)); // 将从机配置信息发送给上位机
 
-        crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 11);
-        host_uart_tx_buffer[11] = crc16_rslt >> 8;
-        host_uart_tx_buffer[12] = crc16_rslt & 0xff;
-        host_uart_transmit(host_uart_tx_buffer, 13);
+        crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 6 + sizeof(slave_config_t));
+        host_uart_tx_buffer[6 + sizeof(slave_config_t)] = crc16_rslt >> 8;
+        host_uart_tx_buffer[7 + sizeof(slave_config_t)] = crc16_rslt & 0xff;
+        host_uart_transmit(host_uart_tx_buffer, BMS_FRAME_NO_DATA_LEN + sizeof(slave_config_t));
 
         break;
 
@@ -855,7 +844,7 @@ void bms_response_host(bms_rx_node_t* rx_node)
         else if(data[0] == stop)
             bms_charge_discharge(stop);
 
-        host_uart_tx_buffer[5] = 0; 
+        host_uart_tx_buffer[5] = 1; 
         host_uart_tx_buffer[6] = data[0]; /* 回复状态 */
         crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 7);
         host_uart_tx_buffer[7] = crc16_rslt >> 8;
