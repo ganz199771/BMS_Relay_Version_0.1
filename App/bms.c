@@ -123,10 +123,6 @@ static void bms_call_slave_config()
     }
 }
 
-
-
-
-
 /* BMS主机在RS485总线上回复从机，在UART上回复上位机 */
 static void rs485_uart_response(void)
 {

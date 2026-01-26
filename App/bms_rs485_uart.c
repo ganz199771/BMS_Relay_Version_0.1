@@ -841,7 +841,7 @@ void bms_response_host(bms_rx_node_t* rx_node)
             bms_precharge(stop);
 
         host_uart_tx_buffer[5] = 1; 
-        host_uart_tx_buffer[6] = data[0]; /* 回复的状态 */
+        host_uart_tx_buffer[6] = data[0]; /* 回复状态 */
         crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 7);
         host_uart_tx_buffer[7] = crc16_rslt >> 8;
         host_uart_tx_buffer[8] = crc16_rslt & 0xff;
@@ -856,7 +856,7 @@ void bms_response_host(bms_rx_node_t* rx_node)
             bms_charge_discharge(stop);
 
         host_uart_tx_buffer[5] = 0; 
-        host_uart_tx_buffer[6] = data[0]; /* 回复的状态 */
+        host_uart_tx_buffer[6] = data[0]; /* 回复状态 */
         crc16_rslt = CRC16_MODBUS(host_uart_tx_buffer, 7);
         host_uart_tx_buffer[7] = crc16_rslt >> 8;
         host_uart_tx_buffer[8] = crc16_rslt & 0xff;
