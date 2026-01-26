@@ -404,13 +404,13 @@ static void bms_background_measure(void)
 
     /* 测量NTC1温度 */
     vadc_rslt = XMC_VADC_GROUP_GetResult(VADC_G1, 7);
-    float resistor = 2.4f / (3.3f / (5.0f * vadc_rslt / 4096) - 1);
-    _bms_st.NTC1_temp = 1.0f * NTC_res_calc_temp(resistor) / 100 - 273.15f;
+    float resistor = NTC_SERIAL_RESISTOR / (NTC_VCC / (5.0f * vadc_rslt / 4096) - 1);
+    _bms_st.NTC1_temp = 1.0f * NTC_res_calc_temp(resistor) / TEMP_SCALE - ZERO_CEL_KELVIN;
 
     /* 测量NTC2温度 */
     vadc_rslt = XMC_VADC_GROUP_GetResult(VADC_G0, 0);
-    resistor = 2.4f / (3.3f / (5.0f * vadc_rslt / 4096) - 1);
-    _bms_st.NTC2_temp = 1.0f * NTC_res_calc_temp(resistor) / 100 - 273.15f;
+    resistor = NTC_SERIAL_RESISTOR / (NTC_VCC / (5.0f * vadc_rslt / 4096) - 1);
+    _bms_st.NTC2_temp = 1.0f * NTC_res_calc_temp(resistor) / TEMP_SCALE - ZERO_CEL_KELVIN;
 
     /* 测量绝缘电阻 */
     float iso_rp, iso_rn;
