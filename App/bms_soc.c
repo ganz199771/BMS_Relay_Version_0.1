@@ -6,7 +6,6 @@
 #include "bms_rs485_uart.h"
 
 static float bms_f_soc = 0.f;
-static volatile uint8_t soc_tick = 0;
 
 /* 三元锂SOC-OCV表格 */
 static const uint16_t LiPo_SOC_OCV_table[20][6] = {
@@ -167,14 +166,14 @@ static float init_SOC_under_OCV()
                 cell_volt = slave_st_ptr->cmu_board_cell_voltage[i];
         }
 
-        /* 根据放电的SOC-OCV表格，确定单个电池包初始SOC值 */
+        /* 根据放电的SOC-OCV表格，确定单个电池包初始SOC值，这里bms_f_soc是单个电池包的初始SOC值 */
         if(slave_cfg_ptr->cell_type == Ternary_lithium)
             bms_f_soc = LiPo_soc_from_table(LiPo_SOC_OCV_table, cell_volt, ntc_temp); 
         else if(slave_cfg_ptr->cell_type == Lithium_Iron_Phosphate)
             bms_f_soc = LiFeO4_soc_from_table(LiFeO4_SOC_OCV_table, cell_volt, ntc_temp);
 
-        if(bms_st_ptr->SOC > bms_f_soc)
-            bms_st_ptr->SOC = bms_f_soc; /* 总的SOC采用单个电池SOC最低值 */
+        if(bms_st_ptr->SOC > bms_f_soc) /* bms_st_ptr->SOC在bms_init已经初始化为100 */
+            bms_st_ptr->SOC = bms_f_soc; /* 总的SOC采用所有电池包SOC最低值 */
     }
 
     return bms_f_soc;
@@ -199,13 +198,6 @@ void CCU40_2_IRQHandler(void)
     /* 在不放电时不进行安时积分，并且适当校准SOC */
     if(bms_st_ptr->state == Idle)
     {
-        soc_tick++;
-        if(soc_tick >= 10)
-        {
-            init_SOC_under_OCV(); /* 上电时刻，认为是准备让电池放电，更新BMS的SOC */
-            bms_st_ptr->SOC = bms_f_soc;
-            soc_tick = 0;
-        }
         return;
     }
 

@@ -15,8 +15,8 @@
 #define CAPTURE_0_VALUE_FALLING_EDGE 3
 
 
-#define PWM_DUTY_CYCLE_MIN 40 /* PWM输入捕获计算得到的占空比应该为50%，给定一个下限 */
-#define PWM_DUTY_CYCLE_MAX 60 /* PWM输入捕获计算得到的占空比应该为50%，给定一个下限 */
+#define PWM_DUTY_CYCLE_MIN 48 /* PWM输入捕获计算得到的占空比应该为50%，给定一个下限 */
+#define PWM_DUTY_CYCLE_MAX 52 /* PWM输入捕获计算得到的占空比应该为50%，给定一个下限 */
 
 typedef struct pwm_cap_info
 {

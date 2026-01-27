@@ -3726,7 +3726,7 @@
                     <Parameters>
                         <Param id="inFlash" value="true"/>
                         <Param id="input_hysteresis" value="XMC_GPIO_INPUT_HYSTERESIS_STANDARD"/>
-                        <Param id="input_mode" value="XMC_GPIO_MODE_INPUT_TRISTATE"/>
+                        <Param id="input_mode" value="XMC_GPIO_MODE_INPUT_PULL_UP"/>
                         <Param id="io_function" value="XMC_GPIO_INPUT"/>
                         <Param id="output_level" value="XMC_GPIO_OUTPUT_LEVEL_LOW"/>
                         <Param id="output_mode" value="XMC_GPIO_MODE_OUTPUT_PUSH_PULL"/>
