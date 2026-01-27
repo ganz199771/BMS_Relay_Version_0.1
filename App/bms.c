@@ -49,7 +49,7 @@ void bms_init(void)
     _bms_st.cpu_usage = _bms_st.ram_usage = 0;
     _bms_st.timestamp = 0; /* 运行时长 */
     _bms_st.state = Idle;
-    _bms_st.SOC = 100;
+    _bms_st.SOC = SOC_MAX;
 
     bms_config_init(); /* 上电后初始化BMS配置 */
     bms_rs485_uart_init(); /* 初始化RS485(从机)、CAN(从机)、UART(上位机) */
@@ -188,7 +188,6 @@ static void bms_call_slave(uint8_t slave_id)
 /// @return 
 static int check_if_all_slave_initial_state_fetched()
 {
-    static uint8_t delay_count = 0; /* 计算SOC初值时，需要获得准确的PACK状态，轮询三次从机 */
     /* 当没有在线从机时，返回-1 */
     if(get_slave_node_count() == 0)
         return -1;
@@ -200,11 +199,6 @@ static int check_if_all_slave_initial_state_fetched()
         if((ptr->slave_st.chip_temp == BMS_SLAVE_STATE_NOT_FETCH_FLAG))
             return -2; /* 当BMS还没有获取所有的从机的状态数据，返回-2 */
     }
-
-    delay_count++;
-
-    if(delay_count <= 2)
-        return -3;
 
     return 0;
 }

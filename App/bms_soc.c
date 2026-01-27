@@ -61,7 +61,7 @@ static const uint16_t LiFeO4_SOC_OCV_table[20][6] = {
 /// @param table SOC-OCV表格
 /// @param cell_voltage 电芯电压，单位mV
 /// @param temp_k 温度，单位0.01K
-/// @return SOC值
+/// @return SOC值，0~100之间
 static float LiPo_soc_from_table(const uint16_t(*table)[6] , uint16_t cell_voltage, uint16_t temp_k)
 {
     int8_t temp_cel = (int8_t)(temp_k * 0.01f - 273.15f);
@@ -195,9 +195,10 @@ void CCU40_2_IRQHandler(void)
     bms_status_t* bms_st_ptr = read_bms_status();
     bms_config_t* bms_cfg_ptr = get_bms_config();
 
-    /* 在不放电时不进行安时积分，并且适当校准SOC */
+    /* 在不放电时不进行安时积分，并且校准SOC */
     if(bms_st_ptr->state == Idle)
     {
+        init_SOC_under_OCV();
         return;
     }
 
