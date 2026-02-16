@@ -1,5 +1,3 @@
-# XMC&trade; MCU: Empty application template
-
 根据BMS设计方案，BMS为主从模式，每个PACK内部一个BMS从机，所有PACK被一个BMS主机控制，从BMS主机功能需求出发，对主机软件完成详细设计。
 
 ## 功能要求与分析

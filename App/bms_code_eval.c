@@ -1,7 +1,7 @@
 
 #include "bms_code_eval.h"
 #include "bms_rs485_uart.h"
-#include "bms_wifi.h"
+#include "bms_wifi_bluetooth.h"
 
 #include <cmsis_gcc.h>
 
@@ -45,7 +45,7 @@ static uint16_t get_current_heap_usage()
     uint16_t heap1_used = rs485_heap_used(); // 2240
     uint16_t heap2_used = host_heap_used(); // 33972
     uint16_t heap3_used = slave_heap_used(); // 1384
-    uint16_t heap4_used = wifi_heap_used(); // 2564
+    uint16_t heap4_used = bms_bluetooth_wifi_heap_used(); // 2564
 
     uint16_t heap_used_byte = heap1_used + heap2_used + heap3_used + heap4_used;
     return heap_used_byte;

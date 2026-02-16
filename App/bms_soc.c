@@ -5,7 +5,20 @@
 #include "bms_config.h"
 #include "bms_rs485_uart.h"
 
-static float bms_f_soc = 0.f;
+/**
+ * 使用 SOC-OCV 方式计算初始SOC值，然后基于安-时积分，修改SOC值
+ * 使用 容量衰减法计算SOH，步骤是：
+ * 1、初始时刻，没有充电和放电，记录此时的SOC值为 initial_soc
+ * 2、进行充电、放电，并在充放电结束之后，记录此时的SOC值为 end_soc，在充电结束之后，需要经过一段时间才能根据SOC-OCV表格获得较为准确的SOC值
+ * 3、已知电池额定容量 cap
+ * 4、另外一方面，可以从电流积分得到实际的充电容量 charge_cap_it = ∫idt
+ * 5、于是电池实际容量 cap_now = charge_cap_it / (end_soc - initial_soc)
+ * 6、SOH = cap_now / cap
+ */
+
+static uint16_t initial_soc; /* 记录充电/放电开始时的SOC值，单位0.01% */
+static uint32_t initial_charge_cap; /* 记录充电/放电结束时的SOC值，单位0.1Ah */
+static volatile uint8_t soc_calc_ticks = 0; /* 中断服务函数内使用，当处于idle状态超过2s时，更新SOC值 */
 
 /* 三元锂SOC-OCV表格 */
 static const uint16_t LiPo_SOC_OCV_table[20][6] = {
@@ -91,7 +104,7 @@ static float LiPo_soc_from_table(const uint16_t(*table)[6] , uint16_t cell_volta
             if(table[i + 1][col_index] == table[i][col_index])
                 return (i + 1) * 5 / SOC_PRECISION;
 
-            float k = 1.0f * (table[i + 1][col_index] - cell_voltage) / (table[i + 1][col_index] - table[i][col_index]); /* 系数 */
+            float k = 1.0f * (cell_voltage - table[i][col_index]) / (table[i + 1][col_index] - table[i][col_index]); /* 系数 */
             return (i + 1 + k) * 5 / SOC_PRECISION;
         }
     }
@@ -139,13 +152,15 @@ static float LiFeO4_soc_from_table(const uint16_t(*table)[6] , uint16_t cell_vol
 
 /// @brief 在放电时，需要以单体电芯最低的SOC作为BMS系统的SOC
 /// @return BMS系统SOC
-static float init_SOC_under_OCV()
+static uint16_t init_SOC_under_OCV()
 {
     slave_node_t* slave_node_head_ptr = get_slave_list_head();
     slave_node_t* ptr = NULL;
     slave_status_t* slave_st_ptr = NULL;
     slave_config_t* slave_cfg_ptr = get_slave_cfg();
-    bms_status_t* bms_st_ptr = read_bms_status();
+
+    uint16_t soc = 0;
+    uint16_t bms_soc = SOC_MAX; /* SOC值，单位0.01% */
 
     list_for_each_entry(ptr, &(slave_node_head_ptr->entry), entry)
     {
@@ -166,25 +181,34 @@ static float init_SOC_under_OCV()
                 cell_volt = slave_st_ptr->cmu_board_cell_voltage[i];
         }
 
-        /* 根据放电的SOC-OCV表格，确定单个电池包初始SOC值，这里bms_f_soc是单个电池包的初始SOC值 */
+        /* 根据放电的SOC-OCV表格，确定单个电池包初始SOC值，这里bms_soc是单个电池包的初始SOC值 */
         if(slave_cfg_ptr->cell_type == Ternary_lithium)
-            bms_f_soc = LiPo_soc_from_table(LiPo_SOC_OCV_table, cell_volt, ntc_temp); 
+            soc = LiPo_soc_from_table(LiPo_SOC_OCV_table, cell_volt, ntc_temp); 
         else if(slave_cfg_ptr->cell_type == Lithium_Iron_Phosphate)
-            bms_f_soc = LiFeO4_soc_from_table(LiFeO4_SOC_OCV_table, cell_volt, ntc_temp);
+            soc = LiFeO4_soc_from_table(LiFeO4_SOC_OCV_table, cell_volt, ntc_temp);
 
-        if(bms_st_ptr->SOC > bms_f_soc) /* bms_st_ptr->SOC在bms_init已经初始化为100 */
-            bms_st_ptr->SOC = bms_f_soc; /* 总的SOC采用所有电池包SOC最低值 */
+        if(bms_soc > soc) /* bms_st_ptr->SOC在bms_init已经初始化为SOC_MAX */
+            bms_soc = soc; /* 总的SOC采用所有电池包SOC最低值 */
     }
 
-    return bms_f_soc;
+    return bms_soc; /* 最低的SOC作为系统SOC */
 }
 
 void soc_init(void)
 {   
-    init_SOC_under_OCV(); /* 上电时刻，认为是准备让电池放电，更新BMS的SOC */
+    bms_config_t* bms_cfg_ptr = read_bms_config();
+    bms_status_t* bms_st_ptr = read_bms_status();
+    bms_st_ptr->SOC = init_SOC_under_OCV(); /* 上电时刻，认为是准备让电池放电，更新BMS的SOC */
+    initial_soc = bms_st_ptr->SOC; /* SOC初值 */
+    initial_charge_cap = bms_cfg_ptr->charge_cap;
 
     NVIC_SetPriority(CCU40_2_IRQn, 4U);
     NVIC_EnableIRQ(CCU40_2_IRQn);
+}
+
+void charge_discharge_action(uint8_t action)
+{
+
 }
 
 
@@ -193,31 +217,49 @@ void soc_init(void)
 void CCU40_2_IRQHandler(void)
 {
     bms_status_t* bms_st_ptr = read_bms_status();
-    bms_config_t* bms_cfg_ptr = get_bms_config();
+    bms_config_t* bms_cfg_ptr = read_bms_config();
 
-    /* 在不放电时不进行安时积分，并且校准SOC */
+    /* 在不放电时不进行安时积分，但是每隔4s更新一次SOC */
     if(bms_st_ptr->state == Idle)
     {
-        init_SOC_under_OCV();
+        soc_calc_ticks++;
+        if(soc_calc_ticks >= SOC_CAL_PERIOD)
+        {
+            soc_calc_ticks = 0;
+            bms_st_ptr->SOC = init_SOC_under_OCV(); /* 根据OCV，更新SOC */
+            
+            /* 如果充电，且充电使得SOC增加了至少40%，则计算SOH并更新 */
+            if(bms_st_ptr->SOC > initial_soc && 
+                (bms_st_ptr->SOC - initial_soc > SOC_CHARGE_LIMIT_FOR_SOH_UPDATE / SOC_PRECISION)) 
+            {
+                uint32_t charge_cap = (bms_cfg_ptr->charge_cap - initial_charge_cap); /* 充电电量，单位0.1Ah */
+                uint32_t bat_now_cap = charge_cap / ((bms_st_ptr->SOC - initial_soc) * SOC_PRECISION / HUANDRED_PERCENT); /* 计算得到的当前电池的总容量，单位0.1Ah */
+
+                /* 根据容量衰减法，计算SOH */
+                uint16_t soh = 1.0f * bat_now_cap / bms_cfg_ptr->bat_total_cap / SOH_PRECISION * HUANDRED_PERCENT; /* 更新SOH */
+                if(soh <= bms_cfg_ptr->soh)
+                {
+                    bms_cfg_ptr->soh = soh;
+                }
+            }
+        }
         return;
     }
 
-    float bsp_cap = bms_cfg_ptr->bat_total_cap * CAP_PRECISION * bms_f_soc * SOC_PRECISION / HUANDRED_PERCENT; /* 上一次计算得到的容量，单位Ah */
+    float bsp_cap = bms_cfg_ptr->bat_total_cap * CAP_PRECISION * bms_st_ptr->SOC * SOC_PRECISION / HUANDRED_PERCENT; /* 上一次计算得到的容量，单位Ah */
     float delta_cap = bms_st_ptr->power_current_A * SOC_CALC_PERIOD_MS * MS_BY_HOUR; /* 积分步长的容量变化 */
     bsp_cap -= delta_cap; /* 积分更新容量 */
-    bms_f_soc = 1.0f * bsp_cap / (bms_cfg_ptr->bat_total_cap * CAP_PRECISION) * HUANDRED_PERCENT / SOC_PRECISION; /* 根据容量，更新SOC值 */
+    bms_st_ptr->SOC = 1.0f * bsp_cap / (bms_cfg_ptr->bat_total_cap * CAP_PRECISION) * HUANDRED_PERCENT / SOC_PRECISION; /* 根据容量，更新SOC值 */
 
     /* 当放电时SOC放电到限制SOC或者以下时，禁止大电流充电和放电，此时可以使用预充继电器给电池充电 */
-    if(bms_f_soc / HUANDRED_PERCENT < bms_cfg_ptr->discharge_soc_limit)
+    if(bms_st_ptr->SOC * SOC_PRECISION < bms_cfg_ptr->discharge_soc_limit)
         bms_charge_discharge(stop); /* 停止放电 */
 
     /* 当充电时SOC计算到100%时，停止积分强制保持在100% */
-    if(bms_f_soc > SOC_MAX)
+    if(bms_st_ptr->SOC > SOC_MAX)
     {
-        bms_f_soc = SOC_MAX;
+        bms_st_ptr->SOC = SOC_MAX;
     }  
-
-    bms_st_ptr->SOC = bms_f_soc;
 
     if(bms_st_ptr->power_current_A < 0) /* 充电 */
         bms_cfg_ptr->charge_cap += (-1 * delta_cap * 10); /* 因为 charge_cap 单位是0.1Ah */

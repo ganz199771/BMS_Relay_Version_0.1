@@ -7,8 +7,9 @@
 #include "config.h"
 
 #define ZERO_CELDIUS_KELVIN 273.15f /* 0℃对应热力学温度K */
-#define BMS_SLAVE_STATE_NOT_FETCH_FLAG 0xff
 
+#define CELL_VOLT_MIN 1500 /* 电芯电压低于1.5V认为存在错误 */
+#define CELL_VOLT_MAX 4500 /* 电芯电压大于4.5V认为存在错误  */
 
 #define CELL_OV_FLAG 0x01
 #define CELL_UV_FLAG 0x02
@@ -18,6 +19,8 @@
 #define CELL_UNDER_TEMP_FLAG 0x02
 #define CHARGE_OVER_CURRENT_FLAG 0x01
 #define DISCHARGE_OVER_CURRENT_FLAG 0x01
+
+#define BUZZZER_RUN_TICKS 1500
 
 /// @brief 存储接收数据指针
 typedef struct bms_rx_node
@@ -115,7 +118,9 @@ typedef enum bms_cmd_type
     Control_PreCharge, // 控制预充
     Control_ChargeDischarge, // 控制充电/放电
     Write_BMS_Config, // 更新BMS配置
-    Restore_BMS_Config // 将BMS配置恢复到出厂值
+    Restore_BMS_Config, // 将BMS配置恢复到出厂值
+
+    BMS_PowerDown // BMS主机下线（掉电之前），向上位机报告
 }bms_cmd_type_t;
 
 
@@ -175,8 +180,8 @@ typedef struct bms_status
     uint16_t iso_RN; // BAT-和PE之间绝缘电阻，单位KΩ
     uint16_t error_state; // 错误状态标志集合
 
-    int8_t NTC1_temp; // NTC1温度
-    int8_t NTC2_temp; // NTC2温度
+    int8_t NTC1_temp; // NTC1温度，单位℃
+    int8_t NTC2_temp; // NTC2温度，单位℃
     uint8_t state; // BMS状态
     uint16_t SOC; // SOC值，单位0.01，例如5208表示SOC=52.08%
     uint8_t ram_usage; // RAM使用率，范围在0~100

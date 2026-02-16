@@ -48,10 +48,10 @@
 #include "retarget_io.h"
 
 #include "bms.h"
-#include "bms_wifi.h"
+#include "bms_wifi_bluetooth.h"
 #include "mempool.h"
 #include "bms_soc.h"
-
+#include "bms_can.h"
 #include "bms_code_eval.h"
 
 /*******************************************************************************
@@ -60,10 +60,11 @@
 
 #define TICKS_PER_SECOND        1000
 
+/// @brief 初始化系统定时器
+/// @param  
 static void bms_board_tick_init(void)
 {
-    NVIC_SetPriority(CCU40_3_IRQn, 10U);
-    NVIC_EnableIRQ(CCU40_3_IRQn);
+    SysTick_Config(SystemCoreClock / TICKS_PER_SECOND); /* 使用systick产生1ms节拍 */
 }
 
 static void bms_board_usic_init(void)
@@ -84,6 +85,8 @@ static void bms_board_usic_init(void)
 
 static void bms_board_can_init(void)
 {
+    bms_can_init();
+    
     XMC_CAN_Enable(CAN);
     XMC_CAN_NODE_Enable(CAN_Node_HW);
 
@@ -123,7 +126,13 @@ static void bms_board_HVIL_init(void)
     NVIC_EnableIRQ(CCU80_1_IRQn);
 }
 
-
+/// @brief 当BMS主机掉电之前，产生GPIO下降沿事件，触发中断，在中断保存关键数据
+/// @param  
+static void bms_board_power_down_event_init(void)
+{
+    NVIC_SetPriority(PowerDown_Event_IRQN, 1U);
+    NVIC_EnableIRQ(PowerDown_Event_IRQN);
+}
 
 int main(void)
 {
@@ -143,6 +152,7 @@ int main(void)
     bms_board_usic_init(); /* 使用USIC外设前初始化 */
     bms_board_can_init(); /* 使用CAN外设前初始化 */
     bms_board_adc_init(); /* 使用ADC外设前初始化 */
+    bms_board_power_down_event_init(); /* 初始化中断，掉电之前保存关键数据 */
     
     bms_init(); /* BMS初始化 */
 

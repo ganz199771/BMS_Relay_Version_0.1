@@ -25,6 +25,10 @@ void rs485_transmit(uint8_t* frame_data, uint16_t frame_len);
 /// @param frame_len 
 void host_uart_transmit(uint8_t* frame_data, uint16_t frame_len);
 
+/// @brief BMS主机在掉电之前向上位机报告
+/// @param  
+void bms_power_down_alert(void);
+
 /// @brief BMS主机向BMS从机发送的buffer进行初始化，BMS主机向上位机发送的buffer初始化
 /// @param  
 void bms_rs485_uart_tx_init(void);

@@ -6,8 +6,11 @@
 #include <stdint.h>
 
 #define XMC_SECTOR_ADDR   (uint32_t *)0x10032000U // 存储BMS状态信息结构体的位置
-#define BMS_CONFIG_FIXHEAD  0x49474940 /* BMS配置信息固定头部 */
+#define BMS_CONFIG_FIXHEAD  0x49474947 /* BMS配置信息固定头部 */
+#define BMS_SOFTWARE_VERSION 0x01
+#define BMS_HARDWARE_VERSION 0x02
 
+#define PACK_SYSTEM_INTERNAL_RES_PRECISION 0.1f /* 内阻，单位0.1mΩ */
 
 #define CELL_OV_LIMIT_DEFAULT 4250 /* 单体过压4.25V */
 #define CELL_UV_LIMIT_DEFAULT 2850 /* 单体欠压2.85V */
@@ -23,9 +26,11 @@
 #define BALANCE_PRECISION_mVOLT_DEFAULT 10 /* 均衡精度10mV */
 #define BAT_TOTAL_CAPCITY_DEFAULT 1158 /* 电池系统总容量115.8Ah */
 #define CYCLE_TIMES_DEFAULT 0 /* 循环次数 */
+#define SOH_INITIAL_DEFAULT 10000 /* 100%，单位0.01% */
 #define CHARGE_TOTAL_CAP_DEFAULT 0 /* 总的充电容量Ah */
 #define DISCHARGE_TOTAL_CAP_DEFAULT 0 /* 总的放电容量Ah */
 #define DISCHARGE_SOC_LIMIT 15 /* 放电到系统容量的15%时截止 */
+#define INTERNAL_RES_DEFAULT 0 /* 系统内阻 */
 
 /* 如何定义一个锂电池电芯的循环？
     循环次数的科学定义是指电池完成一次100%深度充放电的过程，但这并不意味着必须一次性完成。
@@ -35,6 +40,7 @@
 
 typedef struct bms_config
 {
+    /* 基本配置 */
     uint16_t cell_ov_limit; /* 电芯过压阈值，单位mV，当电芯电压 > 此值时，需要停止充电 */
     uint16_t cell_uv_limit; /* 电芯欠压阈值，单位mV，当电芯电压 < 此值时，需要停止放电 */
     uint16_t pack_ov_limit; /* pack过压阈值，单位V，当PACK电压 > 此值时，需要停止充电 */
@@ -51,9 +57,18 @@ typedef struct bms_config
     uint16_t bat_total_cap; // 容量，单位0.1Ah
     uint16_t discharge_soc_limit; // 放电截止SOC，15表示当SOC<=15%时，禁止放电
 
+    /* 错误相关 */
+    uint16_t over_volt_times; /* 过充次数 */
+    uint16_t under_volt_times; /* 过放次数 */
+    uint16_t over_current_times; /* 过流次数 */
+    uint16_t over_temp_times; /* 过温次数 */
+
+    /* SOX 相关 */
     uint16_t cycle_times; /* 循环次数 */
+    uint16_t soh; /* 电池健康度，单位0.01% */
     uint32_t charge_cap; /* 从全新电池开始使用来，总的充电容量，单位0.1Ah */
     uint32_t discharge_cap; /* 从全新电池开始使用来，总的放电容量，单位0.1Ah */
+    uint16_t internal_res; /* 电池组内阻，单位0.1mΩ */
 }bms_config_t;
 
 /// @brief 初始化BMS配置
@@ -62,7 +77,7 @@ void bms_config_init(void);
 
 /// @brief 获取BMS配置结构体
 /// @return 
-bms_config_t* get_bms_config(void);
+bms_config_t* read_bms_config(void);
 
 /// @brief 将BMS初始配置写入到Flash
 /// @param  
@@ -73,9 +88,9 @@ void bms_init_flash_config(void);
 /// @param  
 void app_changed_bms_config(void);
 
-/// @brief 在BMS经历了放电与充电时，需要记录此处放电/充电的电量
+/// @brief 在BMS主机掉电之前，修改一些配置到flash
 /// @param  
-void bms_record_charge_discharge_cap(void);
+void bms_save_config_before_power_down(void);
 
 /// @brief 如果SOC配置、BMS配置发生了更改，此时更新到Flash，如果没有则不做任何动作
 /// @param  

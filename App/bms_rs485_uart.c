@@ -377,7 +377,6 @@ void bms_response_slave(bms_rx_node_t* rx_node)
 
             slave_node_t* new_slave_node = (slave_node_t*)allocate_slave_id_buffer; // 分配空间存储节点
             new_slave_node->slave_id = transmitter_id; // 记录节点ID
-            new_slave_node->slave_st.chip_temp = BMS_SLAVE_STATE_NOT_FETCH_FLAG; /* 将0xff作为一个标志，表明当前的从机状态还没有更新 */
 
             list_add(&(new_slave_node->entry) , &_slave_node_head.entry); // 添加节点
         }
@@ -529,8 +528,6 @@ void bms_response_slave(bms_rx_node_t* rx_node)
                 ptr->slave_st.MT9805_DCC |= data[2 * slave_cfg_ptr->cell_serial_count + 2 * slave_cfg_ptr->ntc_count + 1];
                 ptr->slave_st.MT9805_DCC <<= 8;
                 ptr->slave_st.MT9805_DCC |= data[2 * slave_cfg_ptr->cell_serial_count + 2 * slave_cfg_ptr->ntc_count + 2];
-
-                ptr->slave_st.chip_temp = 0x18;
             }
         }
         break;
@@ -654,7 +651,7 @@ void bms_response_host(bms_rx_node_t* rx_node)
 	uint8_t cmd_type = rx_node->buffer_ptr[4]; // 命令 
 	uint8_t* data = &rx_node->buffer_ptr[6];
     slave_node_t* ptr = NULL;
-    bms_config_t* bms_cfg = get_bms_config();
+    bms_config_t* bms_cfg = read_bms_config();
 
     host_uart_tx_buffer[0] = RS485_FRAME_MAGIC_BYTE1;
     host_uart_tx_buffer[1] = RS485_FRAME_MAGIC_BYTE2;
@@ -920,6 +917,12 @@ uint8_t* bms_prepare_host_uart_tx_frame(uint8_t target_id, bms_cmd_type_t cmd_ty
     host_uart_tx_buffer[6 + len + 1] = crc_rslt & 0xff;
 
     return host_uart_tx_buffer;
+}
+
+void bms_power_down_alert(void)
+{
+    uint8_t* tx_frame = bms_prepare_host_uart_tx_frame(HOST_ID, BMS_PowerDown, 0, NULL);
+    host_uart_transmit(tx_frame, BMS_FRAME_NO_DATA_LEN);
 }
 
 slave_node_t* get_slave_list_head()

@@ -6,11 +6,12 @@
 #include "cycfg_pins.h"
 #include "bms_rs485_uart.h"
 #include "bms_ntc.h"
-#include "bms_wifi.h"
+#include "bms_wifi_bluetooth.h"
 #include "bms_config.h"
 #include "bms_soc.h"
 #include "bms_HVIL.h"
 #include "bms_code_eval.h"
+#include "bms_can.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -28,7 +29,11 @@ static volatile uint16_t bms_background_ticks = 0; // BMS后台定时器运行�
 static volatile uint16_t bms_polling_slave_ticks = 0; // BMS轮询从机定时器运行时间，单位ms
 static volatile uint16_t ram_usage_ticks = 0; // 评估RAM使用的定时器运行时间，单位ms
 static volatile uint32_t bms_run_ticks = 0; /* 统计bms运行时间，单位ms */
+static volatile uint16_t buzzer_ticks = 0; /* 蜂鸣器持续事件，单位ms */
+static volatile uint16_t can_ticks = 0; /* CAN通信相关定时器 */
+
 static uint32_t bms_idle_ticks = 0; /* 统计bms主机调用xmc_delay的时间，单位ms */
+static volatile uint8_t buzzer_start = 0; /* 蜂鸣器开始发出声音 */
 
 /// @brief 延时函数，主要目的是统计空闲时间
 /// @param ms 
@@ -38,22 +43,26 @@ static inline void bms_delay_ms(uint32_t ms)
     bms_idle_ticks += ms;
 }
 
+/// @brief BMS主机在调用 bms_prepare，如果进入到prepare状态，则播放有源蜂鸣器持续时间1s
+/// @param ok 
+static void bms_play_buzzer()
+{
+    XMC_GPIO_SetOutputHigh(Buz_Pin_PORT, Buz_Pin_PIN);
+    buzzer_start = 1;
+}
 
 void bms_init(void)
 {
     bms_rs485_uart_tx_init();
 
     /* 重置BMS状态 */
-    _bms_st.error_state = 0;
-    _bms_st.iso_RN = _bms_st.iso_RP = _bms_st.NTC1_temp = _bms_st.NTC2_temp = _bms_st.power_current_A = _bms_st.voltage = 0;
-    _bms_st.cpu_usage = _bms_st.ram_usage = 0;
-    _bms_st.timestamp = 0; /* 运行时长 */
-    _bms_st.state = Idle;
+    memset(&_bms_st, 0, sizeof(bms_status_t));
     _bms_st.SOC = SOC_MAX;
+    
 
     bms_config_init(); /* 上电后初始化BMS配置 */
     bms_rs485_uart_init(); /* 初始化RS485(从机)、CAN(从机)、UART(上位机) */
-    bms_wifi_init(); /* 初始化Wifi(上位机)、蓝牙(上位机) */
+    bms_bluetooth_wifi_init(); /* 初始化Wifi、蓝牙 */
 }
 
 /// @brief 检查电芯电压是否满足2个条件，如果满足则开启均衡，具体做法就是向从机发送命令
@@ -65,7 +74,7 @@ void bms_prepare_balance(uint8_t slave_id, slave_status_t* p_slave_st)
     if(!p_slave_st)
         return;
 
-    bms_config_t* p_bms_cfg = get_bms_config();
+    bms_config_t* p_bms_cfg = read_bms_config();
 
     uint16_t v_cell1;
     uint16_t v_cell2;
@@ -140,8 +149,8 @@ static void rs485_uart_response(void)
 /// @brief BMS对上位机发来的命令进行响应，对从机发来的数据帧进行处理并记录/更新
 void bms_response()
 {
-    /* WiFi回复上位机命令帧 */
-    ESP12F_response();
+    /* 无线模块回复上位机命令帧 */
+    bms_bluetooth_wifi_response();
 
     /* 回复上位机命令帧，处理从机数据帧 */
     rs485_uart_response();
@@ -194,10 +203,18 @@ static int check_if_all_slave_initial_state_fetched()
 
     slave_node_t* ptr = NULL;
     slave_node_t* slave_head_ptr = get_slave_list_head();
+    slave_config_t* slave_cfg_ptr  = get_slave_cfg();
     list_for_each_entry(ptr, &(slave_head_ptr->entry), entry)
     {
-        if((ptr->slave_st.chip_temp == BMS_SLAVE_STATE_NOT_FETCH_FLAG))
-            return -2; /* 当BMS还没有获取所有的从机的状态数据，返回-2 */
+        for (uint8_t i = 0; i < slave_cfg_ptr->cell_serial_count; i++)
+        {
+            if(ptr->slave_st.cmu_board_cell_voltage[i] == 0)
+                return -2; /* 当有电芯电压为0，认为是没有完全获取到电芯电压 */
+
+            else if(ptr->slave_st.cmu_board_cell_voltage[i] < CELL_VOLT_MIN || 
+                ptr->slave_st.cmu_board_cell_voltage[i] > CELL_VOLT_MAX)
+                return -3; /* 当电芯电压不对，认为轮询从机出现了问题 */
+        }
     }
 
     return 0;
@@ -248,6 +265,7 @@ void bms_prepare(void)
 
     case init_soc_done:
         bms_prepare_st = prepared; /* 准备完毕 */
+        bms_play_buzzer();
         break;
 
     default:
@@ -385,6 +403,30 @@ static void bms_background_check_error(void)
         _bms_st.error_state &= (~BMS_HVIL_Disconnect);
 }
 
+/// @brief BMS后台，CAN定时上传报文任务
+/// @param  
+static void bms_background_can_upload_info(void)
+{
+    if(can_ticks >= BMS_CAN_UPLOAD_PERIOD)
+    {
+        can_ticks = 0;
+        bms_upload_state_info();
+    }
+}
+
+/// @brief BMS后台检查蓝牙、WiFi的连接情况，当有客户端主动发起蓝牙/WiFi连接时，进入到SPP透传模式
+/// @param  
+static void bms_background_check_ble_wifi_link_state(void)
+{
+    if(bms_wifi_link_state() == AT_wifi_linked)
+        bms_wifi_enter_SPP_mode(); /* 进入wifi的无线透传模式 */
+
+    if(bms_ble_link_state() == AT_ble_linked)
+        bms_bluetooth_enter_SPP_mode(); /* 进入蓝牙的无线透传模式 */
+}
+
+/// @brief BMS后台测量任务
+/// @param  
 static void bms_background_measure(void)
 {
     uint16_t vadc_rslt = 0;
@@ -439,7 +481,7 @@ static void bms_background_check_protection(void)
 {
     slave_node_t* ptr = NULL;
     slave_node_t* slave_head_ptr = get_slave_list_head();
-    bms_config_t* bms_cfg_ptr = get_bms_config();
+    bms_config_t* bms_cfg_ptr = read_bms_config();
     
     uint32_t pack_volt = 0; /* pack电压 */
     uint8_t cell_flag = 0; /* 电芯过压和欠压 */
@@ -590,6 +632,10 @@ void bms_background_work()
     bms_background_check_code_state(); /* 检查BMS主机代码的RAM占用率，CPU使用率 */
 
     bms_background_update_config_into_flash(); /* 检查是否需要将修改后的BMS配置更新到Flash */
+
+    bms_background_can_upload_info(); /* BMS定时200ms，通过CAN总线向飞控上传状态 */
+
+    bms_background_check_ble_wifi_link_state(); /* 检查蓝牙、WiFi连接状态，如果有客户端主动发起连接，则进入透传模式 */
 }
 
 /// @brief BMS执行充电/放电命令
@@ -601,7 +647,6 @@ void bms_charge_discharge(coil_status_t st)
         /* 打开主继电器 */
         XMC_GPIO_SetOutputHigh(Coil1_Pin_PORT, Coil1_Pin_PIN); 
         _bms_st.state = ChargeDischarge;
-        bms_record_charge_discharge_cap(); /* 有放电动作 */
     }
     else
     {
@@ -609,7 +654,6 @@ void bms_charge_discharge(coil_status_t st)
         XMC_GPIO_SetOutputLow(Coil1_Pin_PORT, Coil1_Pin_PIN); 
         _bms_st.state = Idle;
     }
-
 }
 
 /// @brief BMS执行预充命令
@@ -621,7 +665,6 @@ void bms_precharge(coil_status_t st)
         /* 打开预充继电器 */
         XMC_GPIO_SetOutputHigh(Coil2_Pin_PORT, Coil2_Pin_PIN); 
         _bms_st.state = PreCharge;
-        bms_record_charge_discharge_cap(); /* 有预充动作 */
     }
     else
     {
@@ -677,15 +720,36 @@ slave_config_t* get_slave_cfg()
 }
 
 /* 系统1ms定时器 */
-void CCU40_3_IRQHandler(void)
+void SysTick_Handler(void)
 {
     prepare_ticks++;
     bms_background_ticks++;
     bms_polling_slave_ticks++;
     ram_usage_ticks++;
     bms_run_ticks++;
+    can_ticks++;
+
+    /* 对于蜂鸣器 */
+    if(buzzer_start)
+    {
+        buzzer_ticks++;
+        if(buzzer_ticks >= BUZZZER_RUN_TICKS)
+        {
+            buzzer_start = 0;
+            buzzer_ticks = 0;
+            XMC_GPIO_SetOutputLow(Buz_Pin_PORT, Buz_Pin_PIN);
+        }
+    }
 }
 
+/// @brief 掉电之前保存数据：将bms_config_t的成员：cycle_times、charge_cap、discharge_cap写回到flash
+/// @param  
+void PowerDown_Event_INTERRUPT_HANDLER(void)
+{
+    bms_save_config_before_power_down();
+    bms_power_down_alert();
+    NVIC_DisableIRQ(PowerDown_Event_IRQN); /* 因为PowerDown优先级较高，防止进入死循环 */
+}
 
 
 

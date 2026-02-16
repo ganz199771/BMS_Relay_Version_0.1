@@ -24,13 +24,14 @@ typedef union u32_union
 }u32_union_t;
 
 static bms_config_modified_t app_modify_bms_cfg = no; /* App修改BMS一些配置，例如高温、低温保护、过流保护、过压保护等 */
-static bms_config_modified_t bms_modify_soc_cfg = no; /* BMS在充电、放电过程中应当记录充电与放电容量 */
 
 static void app_update_bms_config_into_flash(void);
-static void bms_update_SOC_related_data_into_flash(void);
+static void bms_update_SOX_related_data_into_flash(void);
+static void bms_update_error_count_into_flash(void);
 
 void bms_init_flash_config(void)
 {
+    /* 基本配置 */
     bms_config_data.cell_ov_limit = CELL_OV_LIMIT_DEFAULT;
     bms_config_data.cell_uv_limit = CELL_UV_LIMIT_DEFAULT;
     bms_config_data.pack_ov_limit = PACK_OV_LIMIT_DEFAULT;
@@ -45,12 +46,23 @@ void bms_init_flash_config(void)
     bms_config_data.balance_precision = BALANCE_PRECISION_mVOLT_DEFAULT;
     bms_config_data.bat_total_cap = BAT_TOTAL_CAPCITY_DEFAULT;
     bms_config_data.discharge_soc_limit = DISCHARGE_SOC_LIMIT;
+
+    /* 已发生的错误次数 */
+    bms_config_data.under_volt_times = 0;
+    bms_config_data.over_volt_times = 0;
+    bms_config_data.over_current_times = 0;
+    bms_config_data.over_temp_times = 0;
+
+    /* SOC，SOH相关 */
     bms_config_data.cycle_times = CYCLE_TIMES_DEFAULT;
+    bms_config_data.soh = SOH_INITIAL_DEFAULT;
     bms_config_data.charge_cap = CHARGE_TOTAL_CAP_DEFAULT;
     bms_config_data.discharge_cap = DISCHARGE_TOTAL_CAP_DEFAULT;
+    bms_config_data.internal_res = INTERNAL_RES_DEFAULT;
 
     app_update_bms_config_into_flash();
-    bms_update_SOC_related_data_into_flash();
+    bms_update_SOX_related_data_into_flash();
+    bms_update_error_count_into_flash();
 }
 
 /// @brief APP修改了BMS配置，发送给BMS后，BMS在掉电之前将配置写入到Flash
@@ -97,14 +109,41 @@ static void app_update_bms_config_into_flash(void)
     app_modify_bms_cfg = no; /* 上位机修改BMS配置已完成，置标志位no */
 }
 
-static void bms_update_SOC_related_data_into_flash(void)
+/// @brief 将过压次数、欠压次数、过流次数、过温次数写回到 flash
+/// @param  
+static void bms_update_error_count_into_flash(void)
 {
+    XMC_FLASH_ErasePage(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE); /* 擦除 */
+    
+    u32_union_t cfg_data;
+    uint32_t config_data[XMC_FLASH_WORDS_PER_BLOCK];
+
+    /* 关于循环次数、总充电容量、总放电容量，放在另一块page */
+    cfg_data.u16_data[0] = bms_config_data.over_volt_times; /* 过压次数 */
+    cfg_data.u16_data[1] = bms_config_data.under_volt_times; /* 欠压次数 */
+    config_data[0] = cfg_data.u32_data;
+
+    cfg_data.u16_data[0] = bms_config_data.over_current_times; /* 过流次数 */
+    cfg_data.u16_data[1] = bms_config_data.over_temp_times; /* 过温次数 */
+    config_data[1] = cfg_data.u32_data;
+
+    config_data[2] = 0xffffffff;
+    config_data[3] = 0xffffffff;
+    XMC_FLASH_WriteBlocks(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE, config_data, 1, true); // 写配置数据
+}
+
+/// @brief 将循环次数、充电容量、放电容量写回到flash
+/// @param  
+static void bms_update_SOX_related_data_into_flash(void)
+{
+    XMC_FLASH_ErasePage(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE * 2); /* 擦除 */
+    
     u32_union_t cfg_data;
     uint32_t config_data[XMC_FLASH_WORDS_PER_BLOCK];
 
     /* 关于循环次数、总充电容量、总放电容量，放在另一块page */
     cfg_data.u16_data[0] = bms_config_data.cycle_times; /* 循环次数 */
-    cfg_data.u16_data[1] = 0xffff;
+    cfg_data.u16_data[1] = bms_config_data.soh; /* SOH */
     config_data[0] = cfg_data.u32_data;
 
     cfg_data.u32_data = bms_config_data.charge_cap;
@@ -113,11 +152,10 @@ static void bms_update_SOC_related_data_into_flash(void)
     cfg_data.u32_data = bms_config_data.discharge_cap;
     config_data[2] = cfg_data.u32_data;
 
-    config_data[3] = 0xffffffff;
-    XMC_FLASH_ErasePage(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE); /* 擦除 */
-    XMC_FLASH_WriteBlocks(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE, config_data, 1, true); // 写配置数据
-
-    bms_modify_soc_cfg = no; /* 修改充放电信息已完成，置标志位no */
+    cfg_data.u16_data[0] = bms_config_data.internal_res;
+    cfg_data.u16_data[1] = 0xffff;
+    config_data[3] = cfg_data.u32_data;
+    XMC_FLASH_WriteBlocks(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE * 2, config_data, 1, true); // 写配置数据
 }
 
 /// @brief 从Flash读取配置信息并填充到结构体
@@ -156,16 +194,30 @@ static void read_config_file_from_flash(void)
     bms_config_data.bat_total_cap = cfg_data.u16_data[0]; /* 电池总容量 */
     bms_config_data.discharge_soc_limit = cfg_data.u16_data[1]; /* 放电截止SOC */
 
-    /* 循环次数、充电容量、放电容量 */
+    /* 读取错误次数 */
     XMC_FLASH_ReadBlocks(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE, bms_config_buf, 1);
     cfg_data.u32_data = bms_config_buf[0];
+    bms_config_data.over_volt_times = cfg_data.u16_data[0]; /* 过压次数 */
+    bms_config_data.under_volt_times = cfg_data.u16_data[1]; /* 欠压次数 */
+
+    cfg_data.u32_data = bms_config_buf[1];
+    bms_config_data.over_current_times = cfg_data.u16_data[0]; /* 过流次数 */
+    bms_config_data.over_temp_times = cfg_data.u16_data[1]; /* 过温次数 */
+
+    /* 循环次数、充电容量、放电容量、内阻 */
+    XMC_FLASH_ReadBlocks(XMC_SECTOR_ADDR + XMC_FLASH_BYTES_PER_PAGE * 2, bms_config_buf, 1);
+    cfg_data.u32_data = bms_config_buf[0];
     bms_config_data.cycle_times = cfg_data.u16_data[0]; /* 循环次数 */
+    bms_config_data.soh = cfg_data.u16_data[1]; /* SOH值 */
 
     cfg_data.u32_data = bms_config_buf[1];
     bms_config_data.charge_cap = cfg_data.u32_data; /* 总充电容量 */
 
     cfg_data.u32_data = bms_config_buf[2];
     bms_config_data.discharge_cap = cfg_data.u32_data; /* 总放电容量 */
+
+    cfg_data.u32_data = bms_config_buf[3];
+    bms_config_data.internal_res = cfg_data.u16_data[0]; /* 内阻 */
 }
 
 
@@ -181,46 +233,31 @@ void bms_config_init(void)
         debug_print("first build BMS config file in flash.\r\n");
     }
 
-    else // 有配置信息，从对应位置读取CMU状态信息
+    else // 有配置信息，从对应位置读取配置信息
     {
         read_config_file_from_flash();
         debug_print("read BMS config file from flash done.\r\n");
     }
 }
 
-bms_config_t* get_bms_config()
+bms_config_t* read_bms_config()
 {
     return &bms_config_data;
 }
-
-// /* 中断例程中将修改后的配置写入到Flash */
-// void eru_1_ogu_0_INTERRUPT_HANDLER(void)
-// {
-//     __disable_irq(); /* 关闭所有中断 */
-
-//     if(app_modify_bms_cfg == yes)
-//         app_update_bms_config_into_flash(); /* 写回到flash */
-//     if(bms_modify_soc_cfg)
-//         bms_update_SOC_related_data_into_flash();
-
-//     __enable_irq(); /* 开启中断 */
-// }
 
 void app_changed_bms_config(void)
 {
     app_modify_bms_cfg = yes;
 }
 
-void bms_record_charge_discharge_cap(void)
+void bms_save_config_before_power_down(void)
 {
-    bms_modify_soc_cfg = yes;
+    bms_update_SOX_related_data_into_flash();
+    bms_update_error_count_into_flash();
 }
 
 void bms_background_update_config_into_flash(void)
 {
     if(app_modify_bms_cfg == yes)
         app_update_bms_config_into_flash();
-
-    if(bms_modify_soc_cfg == yes)
-        bms_update_SOC_related_data_into_flash();
 }
